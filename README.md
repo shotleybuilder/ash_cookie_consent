@@ -1,0 +1,208 @@
+# AshCookieConsent
+
+GDPR-compliant cookie consent management for Ash Framework applications.
+
+## Features
+
+- ✅ **Ash-Native**: Built as an Ash.Resource with full policy support
+- ✅ **GDPR Compliant**: Complete audit trail with consent timestamps and policy versions
+- ✅ **Phoenix Integration**: Works with traditional controllers and LiveView
+- ✅ **Three-Tier Storage**: Browser cookies + Phoenix session + database persistence
+- ✅ **Cross-Device Support**: Consent follows users across devices when logged in
+- ✅ **Customizable UI**: Phoenix Components with AlpineJS for interactivity
+- ✅ **Lightweight**: Minimal dependencies, no heavy JavaScript frameworks
+
+## Installation
+
+Add `ash_cookie_consent` to your list of dependencies in `mix.exs`:
+
+```elixir
+def deps do
+  [
+    {:ash_cookie_consent, "~> 0.1.0"}
+  ]
+end
+```
+
+## Quick Start
+
+### 1. Define Your ConsentSettings Resource
+
+```elixir
+defmodule MyApp.Consent.ConsentSettings do
+  use Ash.Resource,
+    domain: MyApp.Consent,
+    data_layer: AshPostgres.DataLayer
+
+  postgres do
+    table "consent_settings"
+    repo MyApp.Repo
+  end
+
+  attributes do
+    uuid_primary_key :id
+
+    attribute :terms, :string do
+      description "Policy version identifier"
+      allow_nil? false
+    end
+
+    attribute :groups, {:array, :string} do
+      description "Consented cookie categories"
+      default []
+    end
+
+    attribute :consented_at, :utc_datetime do
+      description "When user provided consent"
+    end
+
+    attribute :expires_at, :utc_datetime do
+      description "When consent expires"
+    end
+
+    timestamps()
+  end
+
+  relationships do
+    belongs_to :user, MyApp.Accounts.User
+  end
+
+  actions do
+    defaults [:read]
+
+    create :create do
+      primary? true
+    end
+
+    update :update do
+      primary? true
+    end
+  end
+end
+```
+
+### 2. Add to Your Router
+
+```elixir
+# For traditional Phoenix controllers
+pipeline :browser do
+  # ... your existing plugs
+  plug AshCookieConsent.Plug, resource: MyApp.Consent.ConsentSettings
+end
+
+# For LiveView
+defmodule MyAppWeb do
+  def router do
+    quote do
+      # ... existing code
+      on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
+    end
+  end
+end
+```
+
+### 3. Add Consent Modal to Layout
+
+```heex
+<!-- In your root.html.heex or app.html.heex -->
+<.consent_modal
+  :if={@show_consent_modal}
+  current_consent={@consent}
+/>
+```
+
+## Usage
+
+### Checking Consent
+
+```elixir
+# In a controller or LiveView
+if AshCookieConsent.consent_given?(conn, "analytics") do
+  # Load analytics scripts
+end
+```
+
+### Conditional Script Loading
+
+```heex
+<!-- Only load if user consented to analytics -->
+<AshCookieConsent.Components.ConsentScript.render
+  consent={@consent}
+  group="analytics"
+  src="https://www.googletagmanager.com/gtag/js?id=GA_ID"
+/>
+```
+
+### Customizing Cookie Categories
+
+```elixir
+# In your config/config.exs
+config :ash_cookie_consent,
+  cookie_groups: [
+    %{
+      id: "essential",
+      label: "Essential Cookies",
+      description: "Required for the website to function",
+      required: true
+    },
+    %{
+      id: "analytics",
+      label: "Analytics",
+      description: "Help us understand how you use our site",
+      required: false
+    },
+    %{
+      id: "marketing",
+      label: "Marketing",
+      description: "Used to deliver personalized ads",
+      required: false
+    }
+  ]
+```
+
+## How It Works
+
+### Three-Tier Storage
+
+1. **Browser Cookie**: Stores consent for anonymous users and provides immediate access
+2. **Phoenix Session**: Request-scoped access for performance
+3. **Database (Ash)**: Long-term storage for authenticated users with audit trail
+
+### Flow
+
+- **Anonymous User**: Consent stored in browser cookie only
+- **User Logs In**: Cookie consent synced to database via Ash
+- **User on New Device**: Database consent loaded to cookie on login
+- **User Clears Cookies**: On re-login, consent restored from database
+
+This approach provides:
+- Fast UX (no database roundtrip on every request)
+- Cross-device consistency for authenticated users
+- GDPR compliance (audit trail in database)
+- Works seamlessly for users who clear cookies
+
+## GDPR Compliance
+
+AshCookieConsent helps you comply with GDPR Article 7(1), which requires you to demonstrate that consent was given:
+
+- ✅ Timestamp of consent (`consented_at`)
+- ✅ Policy version consented to (`terms`)
+- ✅ Specific categories consented (`groups`)
+- ✅ Expiration tracking (`expires_at`)
+- ✅ Full audit trail via Ash timestamps
+
+## Documentation
+
+Full documentation is available at [HexDocs](https://hexdocs.pm/ash_cookie_consent).
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Credits
+
+Inspired by [phx_cookie_consent](https://github.com/pzingg/phx_cookie_consent) by pzingg.
