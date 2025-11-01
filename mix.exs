@@ -2,7 +2,7 @@ defmodule AshCookieConsent.MixProject do
   use Mix.Project
 
   @version "0.1.0"
-  @source_url "https://github.com/sertantai/ash_cookie_consent"
+  @source_url "https://github.com/shotleybuilder/ash_cookie_consent"
 
   def project do
     [

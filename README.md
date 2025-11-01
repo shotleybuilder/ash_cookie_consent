@@ -205,4 +205,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Credits
 
+## Repository
+
+https://github.com/shotleybuilder/ash_cookie_consent
+
 Inspired by [phx_cookie_consent](https://github.com/pzingg/phx_cookie_consent) by pzingg.
