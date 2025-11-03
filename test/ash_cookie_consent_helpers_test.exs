@@ -6,8 +6,10 @@ defmodule AshCookieConsentHelpersTest do
 
   # Helper to build a conn with assigns
   defp build_conn(assigns \\ %{}) do
-    conn(:get, "/")
-    |> Map.put(:assigns, assigns)
+    conn = conn(:get, "/")
+    Enum.reduce(assigns, conn, fn {key, value}, acc ->
+      Plug.Conn.assign(acc, key, value)
+    end)
   end
 
   describe "cookie_groups/0" do

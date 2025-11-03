@@ -34,13 +34,18 @@ defmodule AshCookieConsent do
   @doc """
   Returns the configured cookie groups.
 
+  Returns a list of configured cookie groups. Each group is a map with:
+  - `:id` - String identifier for the group (e.g., "essential", "analytics")
+  - `:label` - Display label for the group
+  - `:description` - Description text
+  - `:required` - Boolean indicating if the group is required
+
   ## Examples
 
-      iex> AshCookieConsent.cookie_groups()
-      [
-        %{id: "essential", label: "Essential Cookies", ...},
-        %{id: "analytics", label: "Analytics Cookies", ...}
-      ]
+      groups = AshCookieConsent.cookie_groups()
+      # Returns list of group maps like:
+      # [%{id: "essential", label: "Essential Cookies", ...}]
+
   """
   defdelegate cookie_groups(), to: Config
 
@@ -77,8 +82,9 @@ defmodule AshCookieConsent do
     else
       consent = get_consent(conn_or_socket)
 
-      if consent && consent[:groups] do
-        group in consent.groups
+      if consent do
+        groups = consent[:groups] || consent["groups"]
+        groups && group in groups
       else
         false
       end
