@@ -9,6 +9,6 @@ defmodule AshCookieConsent.Domain do
   use Ash.Domain
 
   resources do
-    resource AshCookieConsent.ConsentSettings
+    resource(AshCookieConsent.ConsentSettings)
   end
 end

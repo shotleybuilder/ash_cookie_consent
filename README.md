@@ -14,6 +14,8 @@ GDPR-compliant cookie consent management for Ash Framework applications.
 
 ## Installation
 
+### 1. Add Dependency
+
 Add `ash_cookie_consent` to your list of dependencies in `mix.exs`:
 
 ```elixir
@@ -22,6 +24,38 @@ def deps do
     {:ash_cookie_consent, "~> 0.1.0"}
   ]
 end
+```
+
+### 2. Install AlpineJS
+
+The consent modal requires AlpineJS for interactivity. Add it to your `assets/js/app.js`:
+
+```javascript
+import Alpine from 'alpinejs'
+window.Alpine = Alpine
+Alpine.start()
+```
+
+And install via npm:
+
+```bash
+cd assets && npm install alpinejs --save
+```
+
+### 3. Configure Tailwind CSS
+
+Add the library path to your `assets/tailwind.config.js` to include component styles:
+
+```javascript
+module.exports = {
+  content: [
+    './js/**/*.js',
+    '../lib/*_web.ex',
+    '../lib/*_web/**/*.*ex',
+    '../deps/ash_cookie_consent/lib/**/*.ex'  // Add this line
+  ],
+  // ...
+}
 ```
 
 ## Quick Start
@@ -105,9 +139,32 @@ end
 
 ```heex
 <!-- In your root.html.heex or app.html.heex -->
-<.consent_modal
-  :if={@show_consent_modal}
+<AshCookieConsent.Components.ConsentModal.consent_modal
   current_consent={@consent}
+  cookie_groups={AshCookieConsent.cookie_groups()}
+  privacy_url="/privacy"
+/>
+```
+
+Or import the component for cleaner syntax:
+
+```elixir
+# In your MyAppWeb module
+def html do
+  quote do
+    # ...existing imports
+    import AshCookieConsent.Components.ConsentModal
+    import AshCookieConsent.Components.ConsentScript
+  end
+end
+```
+
+Then use it like:
+
+```heex
+<.consent_modal
+  current_consent={@consent}
+  cookie_groups={AshCookieConsent.cookie_groups()}
 />
 ```
 
@@ -115,21 +172,96 @@ end
 
 ### Checking Consent
 
+Use the helper functions to check if consent has been given:
+
 ```elixir
 # In a controller or LiveView
 if AshCookieConsent.consent_given?(conn, "analytics") do
   # Load analytics scripts
 end
+
+# Check if any consent exists
+if AshCookieConsent.has_consent?(conn) do
+  # User has made a consent choice
+end
+
+# Check if consent is needed
+if AshCookieConsent.needs_consent?(conn) do
+  # Show consent modal
+end
 ```
 
 ### Conditional Script Loading
 
+The `ConsentScript` component conditionally loads scripts based on user consent:
+
+#### External Scripts
+
 ```heex
-<!-- Only load if user consented to analytics -->
-<AshCookieConsent.Components.ConsentScript.render
+<!-- Google Analytics -->
+<.consent_script
   consent={@consent}
   group="analytics"
-  src="https://www.googletagmanager.com/gtag/js?id=GA_ID"
+  src={"https://www.googletagmanager.com/gtag/js?id=#{@ga_id}"}
+  async={true}
+/>
+
+<!-- Facebook Pixel -->
+<.consent_script
+  consent={@consent}
+  group="marketing"
+  src="https://connect.facebook.net/en_US/fbevents.js"
+  defer={true}
+/>
+
+<!-- Plausible Analytics -->
+<.consent_script
+  consent={@consent}
+  group="analytics"
+  src="https://plausible.io/js/script.js"
+  defer={true}
+  data-domain="example.com"
+/>
+```
+
+#### Inline Scripts
+
+```heex
+<.consent_script consent={@consent} group="analytics">
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'GA_MEASUREMENT_ID');
+</.consent_script>
+```
+
+### Customizing the Modal
+
+The consent modal is highly customizable:
+
+#### Custom Text
+
+```heex
+<.consent_modal
+  current_consent={@consent}
+  cookie_groups={AshCookieConsent.cookie_groups()}
+  title="Cookie Settings"
+  description="We value your privacy. Choose which cookies you want to accept."
+  accept_all_label="Accept All Cookies"
+  reject_all_label="Only Essential"
+  customize_label="Manage Preferences"
+  privacy_url="/privacy-policy"
+/>
+```
+
+#### Custom Styling
+
+```heex
+<.consent_modal
+  current_consent={@consent}
+  cookie_groups={AshCookieConsent.cookie_groups()}
+  modal_class="my-custom-modal"
+  button_class="my-custom-button"
 />
 ```
 
@@ -159,6 +291,36 @@ config :ash_cookie_consent,
     }
   ]
 ```
+
+## Component Features
+
+### Consent Modal
+
+The consent modal provides a user-friendly interface for managing cookie preferences:
+
+- **Two-View Design**: Summary view for quick decisions, detailed view for granular control
+- **Smart Defaults**: Only required (essential) cookies selected by default
+- **Keyboard Navigation**: Full keyboard support (Tab, Enter, Escape to close)
+- **Accessibility**: ARIA labels, focus management, and screen reader support
+- **Responsive**: Mobile-first design that works on all screen sizes
+- **Customizable**: Override text, styling, and behavior
+
+#### Modal Behavior
+
+- Modal automatically shows when no consent has been given
+- Users must make a choice (Accept All, Essential Only, or Customize)
+- Consent is persisted and modal won't show again until expiration
+- Essential cookies cannot be disabled (always selected)
+- Form submission can be handled by your application (default: POST to `/consent`)
+
+### Conditional Script Loading
+
+The `ConsentScript` component ensures GDPR compliance by:
+
+- Only loading scripts when user has consented to the specific category
+- Supporting both external scripts (src) and inline scripts
+- Automatically handling the "essential" category (always loaded)
+- Preventing tracking before consent is given
 
 ## How It Works
 
@@ -190,6 +352,19 @@ AshCookieConsent helps you comply with GDPR Article 7(1), which requires you to 
 - ✅ Specific categories consented (`groups`)
 - ✅ Expiration tracking (`expires_at`)
 - ✅ Full audit trail via Ash timestamps
+
+## Implementation Status
+
+**Current Status**: Phase 2 Complete
+
+- ✅ **Phase 1**: Core Ash resource and domain (ConsentSettings)
+- ✅ **Phase 2**: Phoenix Components (ConsentModal, ConsentScript) and UI layer
+- ⏳ **Phase 3**: Integration layer (Plug, LiveView hooks) - Coming Soon
+- ⏳ **Phase 4**: Testing
+- ⏳ **Phase 5**: Documentation polish
+- ⏳ **Phase 6**: Hex.pm publishing
+
+**Note**: The Plug and LiveView integration examples in this README are aspirational and represent the planned API. Phase 3 will implement these integration points.
 
 ## Documentation
 

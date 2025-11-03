@@ -47,33 +47,33 @@ defmodule AshCookieConsent.ConsentSettings do
     extensions: []
 
   attributes do
-    uuid_primary_key :id
+    uuid_primary_key(:id)
 
     attribute :terms, :string do
-      description "Policy version identifier (e.g., 'v1.0', '2025-01-01')"
-      allow_nil? false
-      public? true
+      description("Policy version identifier (e.g., 'v1.0', '2025-01-01')")
+      allow_nil?(false)
+      public?(true)
     end
 
     attribute :groups, {:array, :string} do
-      description "Consented cookie categories (e.g., ['essential', 'analytics'])"
-      default []
-      public? true
+      description("Consented cookie categories (e.g., ['essential', 'analytics'])")
+      default([])
+      public?(true)
     end
 
     attribute :consented_at, :utc_datetime do
-      description "When user provided consent"
-      public? true
+      description("When user provided consent")
+      public?(true)
     end
 
     attribute :expires_at, :utc_datetime do
-      description "When consent expires (typically 12 months after consented_at)"
-      public? true
+      description("When consent expires (typically 12 months after consented_at)")
+      public?(true)
     end
 
     # Standard Ash timestamps
-    create_timestamp :inserted_at
-    update_timestamp :updated_at
+    create_timestamp(:inserted_at)
+    update_timestamp(:updated_at)
   end
 
   # Relationships section - optional, can be added by implementing app
@@ -86,16 +86,16 @@ defmodule AshCookieConsent.ConsentSettings do
   # end
 
   actions do
-    defaults [:read, :destroy]
+    defaults([:read, :destroy])
 
     # Standard CRUD operations
     create :create do
-      description "Create a new consent record"
-      primary? true
+      description("Create a new consent record")
+      primary?(true)
 
-      accept [:terms, :groups, :consented_at, :expires_at]
+      accept([:terms, :groups, :consented_at, :expires_at])
 
-      change fn changeset, _context ->
+      change(fn changeset, _context ->
         changeset
         |> Ash.Changeset.force_change_attribute(
           :consented_at,
@@ -107,62 +107,62 @@ defmodule AshCookieConsent.ConsentSettings do
           |> DateTime.add(365, :day)
           |> DateTime.truncate(:second)
         )
-      end
+      end)
     end
 
     update :update do
-      description "Update consent preferences"
-      primary? true
+      description("Update consent preferences")
+      primary?(true)
 
-      accept [:terms, :groups, :expires_at]
+      accept([:terms, :groups, :expires_at])
     end
 
     # Custom actions for common consent operations
     create :grant_consent do
-      description "Grant consent for specific cookie groups"
+      description("Grant consent for specific cookie groups")
 
-      accept [:terms, :groups]
+      accept([:terms, :groups])
 
-      change fn changeset, _context ->
+      change(fn changeset, _context ->
         now = DateTime.utc_now() |> DateTime.truncate(:second)
         expires = DateTime.add(now, 365, :day) |> DateTime.truncate(:second)
 
         changeset
         |> Ash.Changeset.force_change_attribute(:consented_at, now)
         |> Ash.Changeset.force_change_attribute(:expires_at, expires)
-      end
+      end)
     end
 
     update :revoke_consent do
-      description "Revoke consent for specific cookie groups"
+      description("Revoke consent for specific cookie groups")
 
-      accept [:groups]
+      accept([:groups])
 
-      change fn changeset, _context ->
+      change(fn changeset, _context ->
         # Update groups while maintaining other attributes
         changeset
-      end
+      end)
     end
 
     read :active_consents do
-      description "Get consents that haven't expired"
+      description("Get consents that haven't expired")
 
-      filter expr(is_nil(expires_at) or expires_at > ^DateTime.utc_now())
+      filter(expr(is_nil(expires_at) or expires_at > ^DateTime.utc_now()))
     end
   end
 
   code_interface do
-    define :create
-    define :read
-    define :update
-    define :destroy
-    define :grant_consent
-    define :revoke_consent
-    define :active_consents
+    define(:create)
+    define(:read)
+    define(:update)
+    define(:destroy)
+    define(:grant_consent)
+    define(:revoke_consent)
+    define(:active_consents)
   end
 
   validations do
-    validate fn changeset, _context ->
+    validate(fn changeset, _context ->
       case Ash.Changeset.get_attribute(changeset, :terms) do
         nil ->
           {:error, field: :terms, message: "must be present"}
@@ -173,9 +173,9 @@ defmodule AshCookieConsent.ConsentSettings do
         _ ->
           {:error, field: :terms, message: "must be a non-empty string"}
       end
-    end
+    end)
 
-    validate fn changeset, _context ->
+    validate(fn changeset, _context ->
       case Ash.Changeset.get_attribute(changeset, :groups) do
         nil ->
           :ok
@@ -190,7 +190,7 @@ defmodule AshCookieConsent.ConsentSettings do
         _ ->
           {:error, field: :groups, message: "must be a list"}
       end
-    end
+    end)
   end
 
   # Policies can be added by implementing apps

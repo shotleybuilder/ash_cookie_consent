@@ -86,7 +86,7 @@ defmodule AshCookieConsent.MixProject do
         "CHANGELOG.md"
       ],
       groups_for_modules: [
-        "Core": [
+        Core: [
           AshCookieConsent,
           AshCookieConsent.ConsentSettings
         ],
@@ -94,7 +94,7 @@ defmodule AshCookieConsent.MixProject do
           AshCookieConsent.Plug,
           AshCookieConsent.LiveView.Hook
         ],
-        "Components": [
+        Components: [
           AshCookieConsent.Components.ConsentModal,
           AshCookieConsent.Components.ConsentScript
         ]
