@@ -89,6 +89,14 @@ defmodule AshCookieConsent.Plug do
     # Get consent from storage
     consent = Storage.get_consent(conn, storage_opts)
 
+    # Cache consent in session if loaded from cookie (for performance)
+    conn =
+      if consent && !get_session_consent(conn, storage_opts) do
+        put_session(conn, config.session_key, consent)
+      else
+        conn
+      end
+
     # Check if user is authenticated
     user_id = Map.get(conn.assigns, config.user_id_key)
 
@@ -115,6 +123,16 @@ defmodule AshCookieConsent.Plug do
 
   # Private functions
 
+  defp get_session_consent(conn, opts) do
+    session_key = Keyword.get(opts, :session_key, "consent")
+
+    try do
+      get_session(conn, session_key)
+    rescue
+      ArgumentError -> nil
+    end
+  end
+
   defp sync_consent_if_needed(conn, consent, user_id, opts) do
     # Check if we need to sync from database
     # This happens on login or when user_id is first available
@@ -140,11 +158,44 @@ defmodule AshCookieConsent.Plug do
   end
 
   defp should_show_modal?(nil), do: true
-  defp should_show_modal?(%{}), do: true
 
   defp should_show_modal?(consent) when is_map(consent) do
-    # Check if consent has expired
-    AshCookieConsent.consent_expired?(consent)
+    # Check if consent has groups
+    groups = get_field(consent, "groups")
+
+    cond do
+      # No groups or empty groups - need consent
+      is_nil(groups) -> true
+      groups == [] -> true
+      # Has groups but expired - need new consent
+      consent_expired?(consent) -> true
+      # Has valid groups and not expired - don't need consent
+      true -> false
+    end
+  end
+
+  defp should_show_modal?(_), do: true
+
+  # Check if consent has expired (handles both string and atom keys)
+  defp consent_expired?(consent) do
+    expires_at = get_field(consent, "expires_at")
+
+    case expires_at do
+      nil ->
+        false
+
+      %DateTime{} = dt ->
+        DateTime.compare(DateTime.utc_now(), dt) == :gt
+
+      timestamp when is_binary(timestamp) ->
+        case parse_datetime(timestamp) do
+          nil -> false
+          dt -> DateTime.compare(DateTime.utc_now(), dt) == :gt
+        end
+
+      _ ->
+        false
+    end
   end
 
   defp load_user_consent(_resource, _user_id) do

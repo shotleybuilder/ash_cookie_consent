@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" class="[scrollbar-gutter:stable]">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="csrf-token" content={get_csrf_token()} />
+    <.live_title suffix=" · MyApp">
+      <%= assigns[:page_title] || "Welcome" %>
+    </.live_title>
+    <link phx-track-static rel="stylesheet" href={~p"/assets/app.css"} />
+    <script defer phx-track-static type="text/javascript" src={~p"/assets/app.js"}>
+    </script>
+
+    <%!-- Conditionally load analytics scripts based on consent --%>
+    <AshCookieConsent.Components.ConsentScript.consent_script
+      consent={assigns[:consent]}
+      group="analytics"
+      src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"
+      async={true}
+    />
+
+    <%!-- Inline analytics configuration (only loads if analytics consent given) --%>
+    <AshCookieConsent.Components.ConsentScript.consent_script
+      consent={assigns[:consent]}
+      group="analytics"
+    >
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'GA_MEASUREMENT_ID');
+    </AshCookieConsent.Components.ConsentScript.consent_script>
+
+    <%!-- Example: Facebook Pixel (marketing group) --%>
+    <AshCookieConsent.Components.ConsentScript.consent_script
+      consent={assigns[:consent]}
+      group="marketing"
+      src="https://connect.facebook.net/en_US/fbevents.js"
+      defer={true}
+    />
+  </head>
+  <body class="bg-white antialiased">
+    <%= @inner_content %>
+
+    <%!--
+      Consent Modal - Automatically shows when no consent has been given
+      The modal will display based on @show_consent_modal which is set by the Plug
+    --%>
+    <AshCookieConsent.Components.ConsentModal.consent_modal
+      current_consent={assigns[:consent]}
+      cookie_groups={assigns[:cookie_groups] || AshCookieConsent.cookie_groups()}
+      privacy_url="/privacy"
+    />
+
+    <%!--
+      Optional: Add AlpineJS hook to handle cookie updates from LiveView
+      This is needed if you're using LiveView and want to update cookies via push_event
+    --%>
+    <script>
+      // Listen for cookie update events from LiveView
+      window.addEventListener("phx:update-consent-cookie", (e) => {
+        const consent = e.detail.consent;
+        // Set the cookie (expires in 1 year)
+        const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+        document.cookie = `_consent=${encodeURIComponent(consent)}; expires=${expires}; path=/; SameSite=Lax`;
+
+        // Optionally reload the page to apply new consent settings
+        // window.location.reload();
+      });
+    </script>
+  </body>
+</html>

@@ -91,8 +91,7 @@ defmodule AshCookieConsent.LiveView.Hook do
   def on_mount(:require_consent, params, session, socket) do
     consent = Map.get(session, "consent")
 
-    if AshCookieConsent.has_consent?(%{assigns: %{consent: consent}}) &&
-         !AshCookieConsent.consent_expired?(consent) do
+    if has_valid_consent?(consent) do
       # Consent is valid, continue
       on_mount(:load_consent, params, session, socket)
     else
@@ -187,11 +186,67 @@ defmodule AshCookieConsent.LiveView.Hook do
 
   # Private functions
 
+  defp has_valid_consent?(nil), do: false
+
+  defp has_valid_consent?(consent) when is_map(consent) do
+    groups = get_field(consent, "groups")
+    !is_nil(groups) && groups != [] && !consent_expired?(consent)
+  end
+
+  defp has_valid_consent?(_), do: false
+
   defp should_show_modal?(nil), do: true
-  defp should_show_modal?(%{}), do: true
 
   defp should_show_modal?(consent) when is_map(consent) do
-    AshCookieConsent.consent_expired?(consent)
+    # Check if consent has groups (handles both string and atom keys)
+    groups = get_field(consent, "groups")
+
+    cond do
+      # No groups or empty groups - need consent
+      is_nil(groups) -> true
+      groups == [] -> true
+      # Has groups but expired - need new consent
+      consent_expired?(consent) -> true
+      # Has valid groups and not expired - don't need consent
+      true -> false
+    end
+  end
+
+  defp should_show_modal?(_), do: true
+
+  # Check if consent has expired (handles both string and atom keys)
+  defp consent_expired?(consent) do
+    expires_at = get_field(consent, "expires_at")
+
+    case expires_at do
+      nil ->
+        false
+
+      %DateTime{} = dt ->
+        DateTime.compare(DateTime.utc_now(), dt) == :gt
+
+      timestamp when is_binary(timestamp) ->
+        case parse_datetime(timestamp) do
+          nil -> false
+          dt -> DateTime.compare(DateTime.utc_now(), dt) == :gt
+        end
+
+      _ ->
+        false
+    end
+  end
+
+  defp get_field(consent, field) when is_map(consent) do
+    Map.get(consent, field) || Map.get(consent, String.to_atom(field))
+  end
+
+  defp get_field(_, _), do: nil
+
+  defp parse_datetime(timestamp) do
+    case DateTime.from_iso8601(timestamp) do
+      {:ok, dt, _offset} -> dt
+      _ -> nil
+    end
   end
 
   defp get_consent_url(socket) do

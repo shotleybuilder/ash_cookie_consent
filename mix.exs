@@ -83,7 +83,14 @@ defmodule AshCookieConsent.MixProject do
       source_url: @source_url,
       extras: [
         "README.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "guides/getting-started.md",
+        "guides/examples.md",
+        "guides/troubleshooting.md",
+        "guides/extending.md"
+      ],
+      groups_for_extras: [
+        Guides: ~r/guides\/.*/
       ],
       groups_for_modules: [
         Core: [
@@ -92,11 +99,16 @@ defmodule AshCookieConsent.MixProject do
         ],
         "Phoenix Integration": [
           AshCookieConsent.Plug,
-          AshCookieConsent.LiveView.Hook
+          AshCookieConsent.LiveView.Hook,
+          AshCookieConsent.Storage,
+          AshCookieConsent.Cookie
         ],
         Components: [
           AshCookieConsent.Components.ConsentModal,
           AshCookieConsent.Components.ConsentScript
+        ],
+        Configuration: [
+          AshCookieConsent.Config
         ]
       ]
     ]
