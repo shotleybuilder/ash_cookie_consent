@@ -115,22 +115,50 @@ defmodule MyApp.Consent.ConsentSettings do
 end
 ```
 
-### 2. Add to Your Router
+### 2. Add Integration Layer
+
+#### For Traditional Phoenix Controllers (Plug)
+
+Add the plug to your browser pipeline:
 
 ```elixir
-# For traditional Phoenix controllers
+# lib/my_app_web/router.ex
 pipeline :browser do
-  # ... your existing plugs
+  plug :accepts, ["html"]
+  plug :fetch_session
+  plug :fetch_live_flash
+  plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
+  plug :protect_from_forgery
+  plug :put_secure_browser_headers
+
+  # Add the consent plug
   plug AshCookieConsent.Plug, resource: MyApp.Consent.ConsentSettings
 end
+```
 
-# For LiveView
+#### For LiveView Applications (Hook)
+
+Add the hook to your LiveView modules:
+
+```elixir
+# lib/my_app_web.ex
 defmodule MyAppWeb do
-  def router do
+  def live_view do
     quote do
-      # ... existing code
+      use Phoenix.LiveView,
+        layout: {MyAppWeb.Layouts, :app}
+
+      # Add the consent hook
       on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
+
+      unquote(html_helpers())
     end
+  end
+
+  # Or add globally in your router
+  live_session :default, on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
+    live "/", HomeLive
+    # ... other routes
   end
 end
 ```
@@ -324,24 +352,66 @@ The `ConsentScript` component ensures GDPR compliance by:
 
 ## How It Works
 
-### Three-Tier Storage
+### Three-Tier Storage System
 
-1. **Browser Cookie**: Stores consent for anonymous users and provides immediate access
-2. **Phoenix Session**: Request-scoped access for performance
-3. **Database (Ash)**: Long-term storage for authenticated users with audit trail
+The library implements a hierarchical storage system for optimal performance and reliability:
 
-### Flow
+#### Storage Tiers (Read Priority)
 
-- **Anonymous User**: Consent stored in browser cookie only
-- **User Logs In**: Cookie consent synced to database via Ash
-- **User on New Device**: Database consent loaded to cookie on login
-- **User Clears Cookies**: On re-login, consent restored from database
+1. **Connection/Socket Assigns** (Fastest - in-memory, request-scoped)
+   - Checked first for immediate access
+   - No serialization overhead
+   - Lives only for the current request
 
-This approach provides:
-- Fast UX (no database roundtrip on every request)
-- Cross-device consistency for authenticated users
-- GDPR compliance (audit trail in database)
-- Works seamlessly for users who clear cookies
+2. **Phoenix Session** (Fast - server-side, encrypted)
+   - Cached on server for fast access
+   - Survives across requests
+   - Secure (can't be tampered with)
+
+3. **Browser Cookie** (Medium - client-side, signed)
+   - Persists after browser restart
+   - Works for anonymous users
+   - Signed to prevent tampering
+
+4. **Database (Ash)** (Persistent - long-term storage)
+   - Provides audit trail (GDPR requirement)
+   - Cross-device synchronization for authenticated users
+   - Permanent record for compliance
+
+#### How Data Flows
+
+**When Consent is Loaded (Plug/Hook):**
+1. Check assigns → if found, use it (fastest)
+2. Check session → if found, use it
+3. Check cookie → if found, use it
+4. Check database (if authenticated) → if found, use it
+5. If nothing found → show consent modal
+
+**When Consent is Updated:**
+1. Save to cookie (for persistence)
+2. Save to session (for performance)
+3. Update assigns (for current request)
+4. Save to database (if authenticated - planned for Phase 3.1)
+
+### User Flows
+
+#### Anonymous User
+- Consent stored in **cookie only**
+- Fast and simple
+- Persists across browser sessions
+
+#### Authenticated User (Future)
+- **On Login**: Database consent loaded to cookie/session
+- **On Consent Update**: Saved to all tiers including database
+- **On New Device**: Database consent restored automatically
+- **After Clearing Cookies**: Consent restored from database on next login
+
+### Performance Benefits
+
+- ✅ **No Database Query Per Request**: Session cache eliminates DB roundtrips
+- ✅ **Fast Initial Load**: Assigns checked first (no I/O)
+- ✅ **Works Offline**: Cookie-based storage for anonymous users
+- ✅ **Audit Trail**: Database provides GDPR-compliant history
 
 ## GDPR Compliance
 
@@ -355,16 +425,22 @@ AshCookieConsent helps you comply with GDPR Article 7(1), which requires you to 
 
 ## Implementation Status
 
-**Current Status**: Phase 2 Complete
+**Current Status**: Phase 3 In Progress
 
 - ✅ **Phase 1**: Core Ash resource and domain (ConsentSettings)
 - ✅ **Phase 2**: Phoenix Components (ConsentModal, ConsentScript) and UI layer
-- ⏳ **Phase 3**: Integration layer (Plug, LiveView hooks) - Coming Soon
-- ⏳ **Phase 4**: Testing
+- 🚧 **Phase 3**: Integration layer (Plug, LiveView hooks, Storage)
+  - ✅ Cookie management module
+  - ✅ Storage module (three-tier hierarchy)
+  - ✅ Phoenix Plug for traditional controllers
+  - ✅ LiveView Hook for LiveView apps
+  - ⏳ Database sync for authenticated users (Phase 3.1)
+  - ⏳ Form submission handlers
+- ⏳ **Phase 4**: Comprehensive testing
 - ⏳ **Phase 5**: Documentation polish
 - ⏳ **Phase 6**: Hex.pm publishing
 
-**Note**: The Plug and LiveView integration examples in this README are aspirational and represent the planned API. Phase 3 will implement these integration points.
+**Note**: Database synchronization for authenticated users requires the ConsentSettings resource to have a user relationship. This will be implemented in Phase 3.1 or can be added by implementing applications.
 
 ## Documentation
 
