@@ -279,6 +279,7 @@ defmodule AshCookieConsent.Components.ConsentModal do
           </div>
           <!-- Hidden Form for Submission -->
           <form x-ref="consentForm" action={@action} method={@method} class="hidden">
+            <input type="hidden" name="_csrf_token" value={Plug.CSRFProtection.get_csrf_token()} />
             <input type="hidden" name="terms" value="v1.0" />
             <input type="hidden" name="groups" x-bind:value="JSON.stringify(selectedGroups)" />
           </form>
