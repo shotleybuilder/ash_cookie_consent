@@ -3,8 +3,8 @@ defmodule AshCookieConsent.PlugTest do
   import Plug.Test
   import Plug.Conn
 
-  alias AshCookieConsent.Plug, as: ConsentPlug
   alias AshCookieConsent.Cookie
+  alias AshCookieConsent.Plug, as: ConsentPlug
 
   describe "init/1" do
     test "initializes with default options" do
@@ -34,10 +34,12 @@ defmodule AshCookieConsent.PlugTest do
       assert config.user_id_key == :user_id
     end
 
-    test "raises when resource option is missing" do
-      assert_raise KeyError, fn ->
-        ConsentPlug.init([])
-      end
+    test "allows optional resource for lightweight cookie-only mode" do
+      config = ConsentPlug.init([])
+
+      assert config.resource == nil
+      assert config.cookie_name == "_consent"
+      assert config.session_key == "consent"
     end
   end
 

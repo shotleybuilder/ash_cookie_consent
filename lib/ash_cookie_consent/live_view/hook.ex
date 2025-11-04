@@ -138,9 +138,10 @@ defmodule AshCookieConsent.LiveView.Hook do
     user_id_key = Keyword.get(opts, :user_id_key, :current_user_id)
     user_id = Map.get(socket.assigns, user_id_key)
 
-    # Save to database if authenticated
-    if user_id && Keyword.has_key?(opts, :resource) do
-      resource = Keyword.fetch!(opts, :resource)
+    # Save to database if authenticated and resource provided
+    resource = Keyword.get(opts, :resource)
+
+    if user_id && resource do
       save_consent_to_db(resource, user_id, consent)
     end
 
@@ -240,6 +241,9 @@ defmodule AshCookieConsent.LiveView.Hook do
     Map.get(consent, field) || Map.get(consent, String.to_atom(field))
   end
 
+  # Catch-all clause for safety
+  # dialyzer correctly warns this is unreachable in normal usage
+  @dialyzer {:nowarn_function, get_field: 2}
   defp get_field(_, _), do: nil
 
   defp parse_datetime(timestamp) do
@@ -283,6 +287,7 @@ defmodule AshCookieConsent.LiveView.Hook do
     }
   end
 
+  # credo:disable-for-next-line Credo.Check.Design.TagTODO
   defp save_consent_to_db(_resource, _user_id, _consent) do
     # TODO: Implement saving consent to database
     # This requires the ConsentSettings resource to have a user relationship

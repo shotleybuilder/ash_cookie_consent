@@ -46,29 +46,11 @@ defmodule AshCookieConsent.Storage do
       # => %{"terms" => "v1.0", "groups" => ["essential", "analytics"], ...}
   """
   def get_consent(conn, opts \\ []) do
-    # 1. Check assigns first (fastest)
-    case Map.get(conn.assigns, :consent) do
-      nil ->
-        # 2. Check session
-        case get_from_session(conn, opts) do
-          nil ->
-            # 3. Check cookie
-            case Cookie.get_consent(conn, opts) do
-              nil ->
-                # 4. Check database (if authenticated)
-                get_from_database(conn, opts)
-
-              cookie_consent ->
-                cookie_consent
-            end
-
-          session_consent ->
-            session_consent
-        end
-
-      assigns_consent ->
-        assigns_consent
-    end
+    # Check storage tiers in priority order: assigns -> session -> cookie -> database
+    Map.get(conn.assigns, :consent) ||
+      get_from_session(conn, opts) ||
+      Cookie.get_consent(conn, opts) ||
+      get_from_database(conn, opts)
   end
 
   @doc """
@@ -125,20 +107,25 @@ defmodule AshCookieConsent.Storage do
       )
   """
   def sync_on_login(conn, opts) do
-    resource = Keyword.fetch!(opts, :resource)
-    user_id = Keyword.fetch!(opts, :user_id)
+    resource = Keyword.get(opts, :resource)
+    user_id = Keyword.get(opts, :user_id)
 
-    # Load consent from database
-    db_consent = load_user_consent(resource, user_id)
+    # Skip sync if no resource or user_id (lightweight cookie-only mode)
+    if is_nil(resource) or is_nil(user_id) do
+      conn
+    else
+      # Load consent from database
+      db_consent = load_user_consent(resource, user_id)
 
-    # Get cookie consent
-    cookie_consent = Cookie.get_consent(conn, opts)
+      # Get cookie consent
+      cookie_consent = Cookie.get_consent(conn, opts)
 
-    # Merge strategy: DB wins if it exists and is newer
-    merged_consent = merge_consents(db_consent, cookie_consent)
+      # Merge strategy: DB wins if it exists and is newer
+      merged_consent = merge_consents(db_consent, cookie_consent)
 
-    # Update all tiers with merged consent
-    put_consent(conn, merged_consent, opts)
+      # Update all tiers with merged consent
+      put_consent(conn, merged_consent, opts)
+    end
   end
 
   @doc """
@@ -153,16 +140,23 @@ defmodule AshCookieConsent.Storage do
         user_id: user.id
       )
   """
+  # Unreachable branch due to load_user_consent stub returning nil
+  @dialyzer {:nowarn_function, sync_from_database: 2}
   def sync_from_database(conn, opts) do
-    resource = Keyword.fetch!(opts, :resource)
-    user_id = Keyword.fetch!(opts, :user_id)
+    resource = Keyword.get(opts, :resource)
+    user_id = Keyword.get(opts, :user_id)
 
-    case load_user_consent(resource, user_id) do
-      nil ->
-        conn
+    # Skip sync if no resource or user_id (lightweight cookie-only mode)
+    if is_nil(resource) or is_nil(user_id) do
+      conn
+    else
+      case load_user_consent(resource, user_id) do
+        nil ->
+          conn
 
-      db_consent ->
-        put_consent(conn, db_consent, opts)
+        db_consent ->
+          put_consent(conn, db_consent, opts)
+      end
     end
   end
 
@@ -199,24 +193,13 @@ defmodule AshCookieConsent.Storage do
   defp put_to_database(conn, consent, opts) do
     skip_database = Keyword.get(opts, :skip_database, false)
 
-    if skip_database do
-      conn
-    else
-      case get_user_id(conn, opts) do
-        nil ->
-          # Not authenticated, skip database
-          conn
-
-        user_id ->
-          resource = Keyword.get(opts, :resource)
-
-          if resource do
-            save_user_consent(resource, user_id, consent)
-          end
-
-          conn
-      end
+    with false <- skip_database,
+         user_id when not is_nil(user_id) <- get_user_id(conn, opts),
+         resource when not is_nil(resource) <- Keyword.get(opts, :resource) do
+      save_user_consent(resource, user_id, consent)
     end
+
+    conn
   end
 
   defp get_from_database(conn, opts) do
@@ -254,6 +237,10 @@ defmodule AshCookieConsent.Storage do
     Map.get(conn.assigns, user_id_key)
   end
 
+  # credo:disable-for-next-line Credo.Check.Design.TagTODO
+  # Stub implementation - always returns nil until user relationship is added
+  # This causes sync_from_database, merge_consents branches to be unreachable
+  @dialyzer {:nowarn_function, load_user_consent: 2}
   defp load_user_consent(_resource, _user_id) do
     # TODO: Implement user-specific consent loading
     # This requires the ConsentSettings resource to have a user relationship
@@ -262,6 +249,7 @@ defmodule AshCookieConsent.Storage do
     nil
   end
 
+  # credo:disable-for-next-line Credo.Check.Design.TagTODO
   defp save_user_consent(_resource, _user_id, _consent) do
     # TODO: Implement saving consent to database
     # This requires the ConsentSettings resource to have a user relationship
@@ -269,6 +257,8 @@ defmodule AshCookieConsent.Storage do
     {:ok, nil}
   end
 
+  # Unreachable branches due to load_user_consent stub always returning nil
+  @dialyzer {:nowarn_function, merge_consents: 2}
   defp merge_consents(nil, cookie_consent), do: cookie_consent
   defp merge_consents(db_consent, nil), do: db_consent
 
@@ -285,6 +275,8 @@ defmodule AshCookieConsent.Storage do
     end
   end
 
+  # Helper for merge_consents - unreachable due to load_user_consent stub
+  @dialyzer {:nowarn_function, get_timestamp: 2}
   defp get_timestamp(consent, field) do
     case Map.get(consent, field) || Map.get(consent, String.to_atom(field)) do
       %DateTime{} = dt -> dt
@@ -293,6 +285,8 @@ defmodule AshCookieConsent.Storage do
     end
   end
 
+  # Helper for get_timestamp - unreachable due to load_user_consent stub
+  @dialyzer {:nowarn_function, parse_datetime: 1}
   defp parse_datetime(timestamp) do
     case DateTime.from_iso8601(timestamp) do
       {:ok, dt, _offset} -> dt

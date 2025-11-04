@@ -65,7 +65,8 @@ defmodule AshCookieConsent.Plug do
 
   @impl true
   def init(opts) do
-    resource = Keyword.fetch!(opts, :resource)
+    # Resource is optional - only needed for database sync
+    resource = Keyword.get(opts, :resource)
 
     %{
       resource: resource,
@@ -133,27 +134,34 @@ defmodule AshCookieConsent.Plug do
     end
   end
 
+  # Unreachable branches due to load_user_consent stub returning nil
+  @dialyzer {:nowarn_function, sync_consent_if_needed: 4}
   defp sync_consent_if_needed(conn, consent, user_id, opts) do
     # Check if we need to sync from database
     # This happens on login or when user_id is first available
-    resource = Keyword.fetch!(opts, :resource)
+    resource = Keyword.get(opts, :resource)
 
-    # Try to load existing database consent
-    db_consent = load_user_consent(resource, user_id)
+    # Skip sync if no resource configured (lightweight cookie-only mode)
+    if is_nil(resource) do
+      conn
+    else
+      # Try to load existing database consent
+      db_consent = load_user_consent(resource, user_id)
 
-    cond do
-      # No DB consent exists - save cookie consent to DB
-      is_nil(db_consent) ->
-        save_cookie_to_db(resource, user_id, consent)
-        conn
+      cond do
+        # No DB consent exists - save cookie consent to DB
+        is_nil(db_consent) ->
+          save_cookie_to_db(resource, user_id, consent)
+          conn
 
-      # DB consent exists and is newer - update cookie
-      is_newer?(db_consent, consent) ->
-        Storage.put_consent(conn, db_consent, opts)
+        # DB consent exists and is newer - update cookie
+        newer?(db_consent, consent) ->
+          Storage.put_consent(conn, db_consent, opts)
 
-      # Cookie consent is newer or same - keep cookie
-      true ->
-        conn
+        # Cookie consent is newer or same - keep cookie
+        true ->
+          conn
+      end
     end
   end
 
@@ -198,6 +206,10 @@ defmodule AshCookieConsent.Plug do
     end
   end
 
+  # credo:disable-for-next-line Credo.Check.Design.TagTODO
+  # Stub implementation - always returns nil until user relationship is added
+  # This causes downstream code (newer?, get_timestamp) to be unreachable
+  @dialyzer {:nowarn_function, load_user_consent: 2}
   defp load_user_consent(_resource, _user_id) do
     # TODO: Implement user-specific consent loading
     # This requires the ConsentSettings resource to have a user relationship
@@ -206,6 +218,7 @@ defmodule AshCookieConsent.Plug do
     nil
   end
 
+  # credo:disable-for-next-line Credo.Check.Design.TagTODO
   defp save_cookie_to_db(_resource, _user_id, _consent) do
     # TODO: Implement saving consent to database
     # This requires the ConsentSettings resource to have a user relationship
@@ -213,7 +226,9 @@ defmodule AshCookieConsent.Plug do
     {:ok, nil}
   end
 
-  defp is_newer?(consent1, consent2) do
+  # Helper for sync_consent_if_needed - unreachable due to load_user_consent stub
+  @dialyzer {:nowarn_function, newer?: 2}
+  defp newer?(consent1, consent2) do
     time1 = get_timestamp(consent1, "consented_at")
     time2 = get_timestamp(consent2, "consented_at")
 
@@ -224,6 +239,8 @@ defmodule AshCookieConsent.Plug do
     end
   end
 
+  # Helper for newer? - unreachable due to load_user_consent stub
+  @dialyzer {:nowarn_function, get_timestamp: 2}
   defp get_timestamp(consent, field) do
     case get_field(consent, field) do
       %DateTime{} = dt -> dt
@@ -243,5 +260,8 @@ defmodule AshCookieConsent.Plug do
     Map.get(consent, field) || Map.get(consent, String.to_atom(field))
   end
 
+  # Catch-all clause for safety
+  # dialyzer correctly warns this is unreachable in normal usage
+  @dialyzer {:nowarn_function, get_field: 2}
   defp get_field(_, _), do: nil
 end
