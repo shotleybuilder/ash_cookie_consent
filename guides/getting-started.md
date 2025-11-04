@@ -65,7 +65,9 @@ module.exports = {
 
 ### Step 1: Add the Plug to Your Router
 
-The Plug loads consent data and sets assigns for use in your templates:
+The Plug loads consent data and sets assigns for use in your templates.
+
+For lightweight cookie/session storage (no database), the `:resource` parameter is **optional**:
 
 ```elixir
 # lib/my_app_web/router.ex
@@ -80,13 +82,15 @@ defmodule MyAppWeb.Router do
     plug :protect_from_forgery
     plug :put_secure_browser_headers
 
-    # Add the consent plug
-    plug AshCookieConsent.Plug, resource: MyApp.Consent.ConsentSettings
+    # Add the consent plug (resource is optional for Phase 1)
+    plug AshCookieConsent.Plug
   end
 
   # ... your routes
 end
 ```
+
+> **Note**: For database persistence and user-specific consent tracking, add `resource: MyApp.Consent.ConsentSettings` to the plug options. See the [Database Integration](database-integration.md) guide for details.
 
 ### Step 2: Configure LiveView (If Using LiveView)
 
