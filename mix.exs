@@ -72,7 +72,7 @@ defmodule AshCookieConsent.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       maintainers: ["Jason (Sertantai)"],
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md)
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md usage-rules.md)
     ]
   end
 
