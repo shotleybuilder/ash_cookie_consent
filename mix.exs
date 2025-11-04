@@ -85,6 +85,7 @@ defmodule AshCookieConsent.MixProject do
         "README.md",
         "CHANGELOG.md",
         "guides/getting-started.md",
+        "guides/migration-guide.md",
         "guides/examples.md",
         "guides/troubleshooting.md",
         "guides/extending.md"
