@@ -92,7 +92,81 @@ end
 
 > **Note**: For database persistence and user-specific consent tracking, add `resource: MyApp.Consent.ConsentSettings` to the plug options. See the [Database Integration](database-integration.md) guide for details.
 
-### Step 2: Configure LiveView (If Using LiveView)
+### Step 2: Create the Consent Controller
+
+The consent modal submits to a controller that saves the user's preferences. Create the controller:
+
+```elixir
+# lib/my_app_web/controllers/consent_controller.ex
+defmodule MyAppWeb.ConsentController do
+  use MyAppWeb, :controller
+  alias AshCookieConsent.Storage
+
+  def create(conn, params) do
+    # Parse consent groups from JSON
+    groups = parse_groups(params)
+
+    # Build consent data with expiration
+    consent = build_consent(groups, params)
+
+    # Save to cookie and session (no resource needed for Phase 1)
+    conn = Storage.put_consent(conn, consent)
+
+    # Redirect back to the referring page or home
+    redirect_url = get_redirect_url(conn, params)
+
+    conn
+    |> put_flash(:info, "Your cookie preferences have been saved.")
+    |> redirect(to: redirect_url)
+  end
+
+  defp parse_groups(%{"groups" => groups}) when is_list(groups), do: groups
+
+  defp parse_groups(%{"groups" => json}) when is_binary(json) do
+    case Jason.decode(json) do
+      {:ok, groups} when is_list(groups) -> groups
+      _ -> ["essential"]
+    end
+  end
+
+  defp parse_groups(_), do: ["essential"]
+
+  defp build_consent(groups, params) do
+    now = DateTime.utc_now() |> DateTime.truncate(:second)
+    expires = DateTime.add(now, 365, :day) |> DateTime.truncate(:second)
+
+    %{
+      "terms" => Map.get(params, "terms", "v1.0"),
+      "groups" => groups,
+      "consented_at" => now,
+      "expires_at" => expires
+    }
+  end
+
+  defp get_redirect_url(conn, params) do
+    # Try params first, then referer header, then fallback to "/"
+    Map.get(params, "redirect_to") ||
+      get_req_header(conn, "referer") |> List.first() ||
+      "/"
+  end
+end
+```
+
+Then add the route to your router:
+
+```elixir
+# lib/my_app_web/router.ex
+scope "/", MyAppWeb do
+  pipe_through :browser
+
+  # Add this route for consent form submission
+  post "/consent", ConsentController, :create
+
+  # ... your other routes
+end
+```
+
+### Step 3: Configure LiveView (If Using LiveView)
 
 Add the Hook to your application web module:
 
@@ -123,7 +197,7 @@ live_session :default,
 end
 ```
 
-### Step 3: Add the Modal to Your Layout
+### Step 4: Add the Modal to Your Layout
 
 Add the consent modal to your root layout:
 
