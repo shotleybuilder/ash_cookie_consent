@@ -12,17 +12,21 @@ defmodule AshCookieConsent.Plug do
       pipeline :browser do
         plug :accepts, ["html"]
         plug :fetch_session
+        plug :fetch_cookies  # Required for reading consent cookie
         plug :fetch_flash
         plug :protect_from_forgery
         plug :put_secure_browser_headers
-        plug AshCookieConsent.Plug, resource: MyApp.Consent.ConsentSettings
+        plug AshCookieConsent.Plug  # resource is optional for lightweight mode
       end
+
+  **Important**: `plug :fetch_cookies` must come before `AshCookieConsent.Plug` to populate
+  `conn.req_cookies` for the consent library to read the `_consent` cookie.
 
   ## Configuration
 
   The plug accepts the following options:
 
-    - `:resource` - (required) Ash resource module for consent storage
+    - `:resource` - (optional) Ash resource module for database persistence. Not needed for lightweight cookie/session storage.
     - `:cookie_name` - Cookie name (default: "_consent")
     - `:session_key` - Session key (default: "consent")
     - `:user_id_key` - Key in assigns for user ID (default: :current_user_id)

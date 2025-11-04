@@ -77,18 +77,21 @@ defmodule MyAppWeb.Router do
   pipeline :browser do
     plug :accepts, ["html"]
     plug :fetch_session
+    plug :fetch_cookies  # Required: fetches request cookies for consent reading
     plug :fetch_live_flash
     plug :put_root_layout, html: {MyAppWeb.Layouts, :root}
     plug :protect_from_forgery
     plug :put_secure_browser_headers
 
-    # Add the consent plug (resource is optional for Phase 1)
+    # Add the consent plug AFTER :fetch_cookies (resource is optional for Phase 1)
     plug AshCookieConsent.Plug
   end
 
   # ... your routes
 end
 ```
+
+> **Important**: The `plug :fetch_cookies` line is **required** before `AshCookieConsent.Plug`. Phoenix's `:fetch_session` only fetches the session cookie, but the consent library needs access to all request cookies via `conn.req_cookies` to read the `_consent` cookie.
 
 > **Note**: For database persistence and user-specific consent tracking, add `resource: MyApp.Consent.ConsentSettings` to the plug options. See the [Database Integration](database-integration.md) guide for details.
 
