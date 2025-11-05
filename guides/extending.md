@@ -187,6 +187,8 @@ end
 
 This prevents conflicts and makes your API self-documenting.
 
+⚠️ **Next Step Required**: After creating your domain, you MUST register it in config/config.exs (Step 3 below), or migrations will fail with "no domains configured".
+
 ### Step 3: Register Domain in Configuration
 
 **CRITICAL**: After creating your domain, you must register it in your application config. Without this, Ash won't recognize your domain and migrations won't work.
@@ -207,6 +209,8 @@ If you skip this step, you'll get errors like:
 - "no domains configured" when running migrations
 - Domain not found errors at runtime
 - Ash.Query failures
+
+⚠️ **Prerequisite Check**: Before proceeding to Step 4, verify you completed Steps 1-3. The migration generator requires your resource (Step 1), domain (Step 2), and domain registration (Step 3) to be in place.
 
 ### Step 4: Generate and Run Migrations
 
@@ -265,10 +269,12 @@ end
 mix ash.migrate
 ```
 
+⚠️ **Critical Distinction**: Many developers instinctively run `mix ecto.migrate` out of habit. **This will cause errors!**
+
 **Why `ash.migrate` instead of `ecto.migrate`?**
 - `ash.migrate` runs migrations AND updates Ash's internal schema cache
 - `ecto.migrate` only runs migrations, leaving Ash unaware of schema changes
-- This can cause mysterious "column does not exist" errors
+- This can cause mysterious "column does not exist" errors even though the column exists in your database
 
 #### Migration Workflow Summary
 
@@ -310,6 +316,8 @@ priv/
 - They're essential for team collaboration
 - Without them, other developers can't generate correct migrations
 - They enable Ash to diff current schema vs. previous state
+
+⚠️ **Don't Forget**: When you commit your migration file, also commit the corresponding snapshot files in `priv/resource_snapshots/`. Both are needed for the migration to work for other developers.
 
 **What's in a snapshot?**
 ```json
