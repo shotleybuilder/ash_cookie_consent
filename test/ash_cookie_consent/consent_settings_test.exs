@@ -1,6 +1,8 @@
 defmodule AshCookieConsent.ConsentSettingsTest do
   use ExUnit.Case, async: true
 
+  alias Ash.Changeset
+  alias Ash.Resource.Info
   alias AshCookieConsent.ConsentSettings
 
   describe "create action" do
@@ -9,18 +11,18 @@ defmodule AshCookieConsent.ConsentSettingsTest do
       # For now, it tests the changeset validation
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential", "analytics"]
         })
 
       assert changeset.valid?
-      assert Ash.Changeset.get_attribute(changeset, :terms) == "v1.0"
-      assert Ash.Changeset.get_attribute(changeset, :groups) == ["essential", "analytics"]
+      assert Changeset.get_attribute(changeset, :terms) == "v1.0"
+      assert Changeset.get_attribute(changeset, :groups) == ["essential", "analytics"]
 
       # Check that timestamps will be set
-      assert Ash.Changeset.get_attribute(changeset, :consented_at) != nil
-      assert Ash.Changeset.get_attribute(changeset, :expires_at) != nil
+      assert Changeset.get_attribute(changeset, :consented_at) != nil
+      assert Changeset.get_attribute(changeset, :expires_at) != nil
     end
 
     test "sets consented_at to current time" do
@@ -28,12 +30,12 @@ defmodule AshCookieConsent.ConsentSettingsTest do
 
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential"]
         })
 
-      consented_at = Ash.Changeset.get_attribute(changeset, :consented_at)
+      consented_at = Changeset.get_attribute(changeset, :consented_at)
       after_time = DateTime.utc_now() |> DateTime.add(1, :second) |> DateTime.truncate(:second)
 
       assert DateTime.compare(consented_at, before) in [:eq, :gt]
@@ -43,13 +45,13 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "sets expires_at to 365 days from now" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential"]
         })
 
-      expires_at = Ash.Changeset.get_attribute(changeset, :expires_at)
-      consented_at = Ash.Changeset.get_attribute(changeset, :consented_at)
+      expires_at = Changeset.get_attribute(changeset, :expires_at)
+      consented_at = Changeset.get_attribute(changeset, :consented_at)
 
       expected_expires = DateTime.add(consented_at, 365, :day)
 
@@ -63,15 +65,15 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "creates consent with provided terms and groups" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:grant_consent, %{
+        |> Changeset.for_create(:grant_consent, %{
           terms: "v2.0",
           groups: ["essential", "analytics", "marketing"]
         })
 
       assert changeset.valid?
-      assert Ash.Changeset.get_attribute(changeset, :terms) == "v2.0"
+      assert Changeset.get_attribute(changeset, :terms) == "v2.0"
 
-      assert Ash.Changeset.get_attribute(changeset, :groups) == [
+      assert Changeset.get_attribute(changeset, :groups) == [
                "essential",
                "analytics",
                "marketing"
@@ -81,20 +83,20 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "automatically sets timestamps" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:grant_consent, %{
+        |> Changeset.for_create(:grant_consent, %{
           terms: "v1.0",
           groups: ["essential"]
         })
 
-      assert Ash.Changeset.get_attribute(changeset, :consented_at) != nil
-      assert Ash.Changeset.get_attribute(changeset, :expires_at) != nil
+      assert Changeset.get_attribute(changeset, :consented_at) != nil
+      assert Changeset.get_attribute(changeset, :expires_at) != nil
     end
   end
 
   describe "update action" do
     test "update action exists and accepts correct fields" do
       # Just verify the action exists and is configured correctly
-      update_action = Ash.Resource.Info.action(ConsentSettings, :update)
+      update_action = Info.action(ConsentSettings, :update)
 
       assert update_action
       assert update_action.type == :update
@@ -110,7 +112,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "requires terms to be present" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: nil,
           groups: ["essential"]
         })
@@ -124,7 +126,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "requires terms to be non-empty string" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "",
           groups: ["essential"]
         })
@@ -135,7 +137,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "accepts valid terms" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential"]
         })
@@ -149,7 +151,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "requires groups to be a list" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: "not a list"
         })
@@ -163,7 +165,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "requires groups to be a list of strings" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential", 123, :atom]
         })
@@ -177,7 +179,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "accepts valid groups" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: ["essential", "analytics"]
         })
@@ -190,7 +192,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     test "accepts empty groups list" do
       changeset =
         ConsentSettings
-        |> Ash.Changeset.for_create(:create, %{
+        |> Changeset.for_create(:create, %{
           terms: "v1.0",
           groups: []
         })
@@ -204,7 +206,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
   describe "attributes" do
     test "has required attributes" do
       # Test that the resource has the expected attributes
-      attributes = Ash.Resource.Info.attributes(ConsentSettings)
+      attributes = Info.attributes(ConsentSettings)
 
       attribute_names = Enum.map(attributes, & &1.name)
 
@@ -218,7 +220,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     end
 
     test "groups default is empty list" do
-      attributes = Ash.Resource.Info.attributes(ConsentSettings)
+      attributes = Info.attributes(ConsentSettings)
       groups_attr = Enum.find(attributes, &(&1.name == :groups))
 
       assert groups_attr.default == []
@@ -227,7 +229,7 @@ defmodule AshCookieConsent.ConsentSettingsTest do
 
   describe "actions" do
     test "has expected actions" do
-      actions = Ash.Resource.Info.actions(ConsentSettings)
+      actions = Info.actions(ConsentSettings)
       action_names = Enum.map(actions, & &1.name)
 
       assert :create in action_names
@@ -240,12 +242,12 @@ defmodule AshCookieConsent.ConsentSettingsTest do
     end
 
     test "create is the primary create action" do
-      create_action = Ash.Resource.Info.action(ConsentSettings, :create)
+      create_action = Info.action(ConsentSettings, :create)
       assert create_action.primary?
     end
 
     test "update is the primary update action" do
-      update_action = Ash.Resource.Info.action(ConsentSettings, :update)
+      update_action = Info.action(ConsentSettings, :update)
       assert update_action.primary?
     end
   end

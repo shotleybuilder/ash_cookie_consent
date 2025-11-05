@@ -53,20 +53,18 @@ defmodule AshCookieConsent.Cookie do
   def encode_consent(nil), do: {:error, :invalid_consent}
 
   def encode_consent(consent) when is_map(consent) do
-    try do
-      # Convert atom keys to string keys for JSON encoding
-      consent_map =
-        consent
-        |> Map.new(fn {k, v} ->
-          key = if is_atom(k), do: to_string(k), else: k
-          value = encode_value(v)
-          {key, value}
-        end)
+    # Convert atom keys to string keys for JSON encoding
+    consent_map =
+      consent
+      |> Map.new(fn {k, v} ->
+        key = if is_atom(k), do: to_string(k), else: k
+        value = encode_value(v)
+        {key, value}
+      end)
 
-      {:ok, Jason.encode!(consent_map)}
-    rescue
-      error -> {:error, error}
-    end
+    {:ok, Jason.encode!(consent_map)}
+  rescue
+    error -> {:error, error}
   end
 
   def encode_consent(_), do: {:error, :invalid_consent}
@@ -87,14 +85,12 @@ defmodule AshCookieConsent.Cookie do
   def decode_consent(""), do: {:ok, nil}
 
   def decode_consent(json_string) when is_binary(json_string) do
-    try do
-      decoded = Jason.decode!(json_string)
-      # Convert ISO datetime strings back to DateTime structs
-      consent = decode_timestamps(decoded)
-      {:ok, consent}
-    rescue
-      error -> {:error, error}
-    end
+    decoded = Jason.decode!(json_string)
+    # Convert ISO datetime strings back to DateTime structs
+    consent = decode_timestamps(decoded)
+    {:ok, consent}
+  rescue
+    error -> {:error, error}
   end
 
   def decode_consent(_), do: {:error, :invalid_format}

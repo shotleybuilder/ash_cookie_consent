@@ -3,8 +3,8 @@ defmodule AshCookieConsent.StorageTest do
   import Plug.Test
   import Plug.Conn
 
-  alias AshCookieConsent.Storage
   alias AshCookieConsent.Cookie
+  alias AshCookieConsent.Storage
 
   describe "get_consent/2" do
     test "returns consent from assigns when available" do

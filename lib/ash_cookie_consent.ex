@@ -196,12 +196,13 @@ defmodule AshCookieConsent do
   # Works with both Plug.Conn (has get_session/2) and Phoenix.LiveView.Socket
   defp get_session(%Plug.Conn{} = conn, key) do
     # Try to get session, but don't fail if session wasn't fetched
-    try do
-      Plug.Conn.get_session(conn, key)
-    rescue
-      ArgumentError -> nil
-    end
+    Plug.Conn.get_session(conn, key)
+  rescue
+    ArgumentError -> nil
   end
 
+  # Catch-all clause for non-Conn/Socket types
+  # dialyzer correctly warns this is unreachable in normal usage
+  @dialyzer {:nowarn_function, get_session: 2}
   defp get_session(_, _), do: nil
 end
