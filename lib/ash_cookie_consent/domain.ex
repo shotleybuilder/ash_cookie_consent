@@ -6,7 +6,8 @@ defmodule AshCookieConsent.Domain do
   a clean API for consent operations.
   """
 
-  use Ash.Domain
+  use Ash.Domain,
+    validate_config_inclusion?: false
 
   resources do
     resource(AshCookieConsent.ConsentSettings)
