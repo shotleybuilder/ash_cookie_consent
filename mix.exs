@@ -69,10 +69,25 @@ defmodule AshCookieConsent.MixProject do
       licenses: ["MIT"],
       links: %{
         "GitHub" => @source_url,
-        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
+        "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md",
+        "Sponsor" => "https://github.com/sponsors/shotleybuilder"
       },
       maintainers: ["Jason (Sertantai)"],
-      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md usage-rules.md)
+      files: ~w(lib .formatter.exs mix.exs README.md LICENSE CHANGELOG.md usage-rules.md),
+      keywords: [
+        "ash",
+        "ash-framework",
+        "cookie",
+        "consent",
+        "gdpr",
+        "privacy",
+        "phoenix",
+        "liveview",
+        "compliance",
+        "cookies",
+        "tracking",
+        "analytics"
+      ]
     ]
   end
 

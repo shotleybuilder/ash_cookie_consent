@@ -21,3 +21,9 @@ ash_cookie_consent-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
+
+# Private maintainer documentation (not for package or repo)
+/.claude/MAINTAINER_GUIDE.md
+
+# Note: Other .claude/ files (sessions, skills) are committed to git
+# but excluded from Hex package via mix.exs files: list
