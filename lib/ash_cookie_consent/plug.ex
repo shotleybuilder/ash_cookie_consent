@@ -31,6 +31,7 @@ defmodule AshCookieConsent.Plug do
     - `:session_key` - Session key (default: "consent")
     - `:user_id_key` - Key in assigns for user ID (default: :current_user_id)
     - `:cookie_opts` - Additional cookie options (see `AshCookieConsent.Cookie`)
+    - `:skip_session_cache` - Skip caching consent in Phoenix session (default: false). Set to true to avoid session interference.
 
   ## Assigns Set
 
@@ -77,7 +78,8 @@ defmodule AshCookieConsent.Plug do
       cookie_name: Keyword.get(opts, :cookie_name, "_consent"),
       session_key: Keyword.get(opts, :session_key, "consent"),
       user_id_key: Keyword.get(opts, :user_id_key, :current_user_id),
-      cookie_opts: Keyword.get(opts, :cookie_opts, [])
+      cookie_opts: Keyword.get(opts, :cookie_opts, []),
+      skip_session_cache: Keyword.get(opts, :skip_session_cache, false)
     }
   end
 
@@ -95,8 +97,9 @@ defmodule AshCookieConsent.Plug do
     consent = Storage.get_consent(conn, storage_opts)
 
     # Cache consent in session if loaded from cookie (for performance)
+    # Skip if :skip_session_cache is true to avoid session interference
     conn =
-      if consent && !get_session_consent(conn, storage_opts) do
+      if consent && !config.skip_session_cache && !get_session_consent(conn, storage_opts) do
         put_session(conn, config.session_key, consent)
       else
         conn

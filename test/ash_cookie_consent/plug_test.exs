@@ -41,6 +41,18 @@ defmodule AshCookieConsent.PlugTest do
       assert config.cookie_name == "_consent"
       assert config.session_key == "consent"
     end
+
+    test "accepts skip_session_cache option" do
+      config = ConsentPlug.init(resource: TestResource, skip_session_cache: true)
+
+      assert config.skip_session_cache == true
+    end
+
+    test "defaults skip_session_cache to false" do
+      config = ConsentPlug.init(resource: TestResource)
+
+      assert config.skip_session_cache == false
+    end
   end
 
   describe "call/2" do
@@ -177,6 +189,37 @@ defmodule AshCookieConsent.PlugTest do
       # Session should be populated
       session_consent = get_session(conn, "consent")
       assert session_consent["terms"] == "v1.0"
+    end
+
+    test "skips session cache when skip_session_cache is true" do
+      consent = %{terms: "v1.0", groups: ["essential"]}
+      {:ok, json} = Cookie.encode_consent(consent)
+
+      conn =
+        conn(:get, "/")
+        |> init_test_session(%{})
+        |> Map.put(:req_cookies, %{"_consent" => json})
+        |> ConsentPlug.call(ConsentPlug.init(resource: TestResource, skip_session_cache: true))
+
+      # Session should NOT be populated
+      session_consent = get_session(conn, "consent")
+      assert session_consent == nil
+
+      # But consent should still be in assigns (from cookie)
+      assert conn.assigns.consent["terms"] == "v1.0"
+    end
+
+    test "still reads from session when skip_session_cache is true" do
+      # skip_session_cache only prevents WRITING to session, not reading
+      session_consent = %{"terms" => "v2.0", "groups" => ["analytics"]}
+
+      conn =
+        conn(:get, "/")
+        |> init_test_session(%{"consent" => session_consent})
+        |> ConsentPlug.call(ConsentPlug.init(resource: TestResource, skip_session_cache: true))
+
+      # Should still read from session if it's already there
+      assert conn.assigns.consent["terms"] == "v2.0"
     end
   end
 
