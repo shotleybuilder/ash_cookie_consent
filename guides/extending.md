@@ -80,7 +80,9 @@ defmodule MyApp.Consent.ConsentSettings do
   relationships do
     # Add user relationship
     belongs_to :user, MyApp.Accounts.User do
-      allow_nil? false  # Make it required
+      allow_nil? true  # IMPORTANT: Allow nil for anonymous users
+      description "Optional link to authenticated user. Nil for anonymous consent."
+      attribute_writable? true
     end
   end
 
@@ -89,7 +91,7 @@ defmodule MyApp.Consent.ConsentSettings do
 
     create :create do
       primary? true
-      accept [:terms, :groups, :consented_at, :expires_at, :user_id]
+      accept [:terms, :groups, :consented_at, :expires_at, :user_id]  # Include user_id!
     end
 
     update :update do
@@ -133,6 +135,25 @@ defmodule MyApp.Consent.ConsentSettings do
   end
 end
 ```
+
+#### ⚠️ Critical Configuration Notes
+
+**1. User Relationship Must Allow Nil**
+
+Set `allow_nil? true` on the user relationship. This allows:
+- Anonymous users to save consent to cookies (no user_id)
+- Authenticated users to get database persistence (with user_id)
+
+If you set `allow_nil? false`, anonymous users cannot use the consent system.
+
+**2. Include user_id in Accept List**
+
+Add `:user_id` to the `:accept` list in your `:create` action:
+```elixir
+accept [:terms, :groups, :consented_at, :expires_at, :user_id]
+```
+
+Without this, Ash will reject the `user_id` attribute when the Storage module tries to create records for authenticated users, causing silent failures.
 
 ### Step 2: Configure Domain
 
@@ -429,6 +450,52 @@ MyApp.Consent.get_consent_settings!("consent-uuid")
 MyApp.Consent.get_latest_for_user!("user-uuid")
 ```
 
+#### Test Database Sync via Storage Module
+
+After implementing your custom Storage module (see "Implementing Database Sync" section below), test the full sync flow:
+
+```elixir
+# 1. Create a mock conn with authenticated user
+conn = %Plug.Conn{
+  assigns: %{
+    current_user: %MyApp.Accounts.User{id: "550e8400-e29b-41d4-a716-446655440000"}
+  }
+}
+
+# 2. Simulate saving consent
+consent = %{
+  "terms" => "v1.0",
+  "groups" => ["essential", "analytics"],
+  "consented_at" => DateTime.utc_now(),
+  "expires_at" => DateTime.add(DateTime.utc_now(), 365, :day)
+}
+
+MyApp.Consent.Storage.put_consent(conn, consent, [
+  resource: MyApp.Consent.ConsentSettings,
+  user_id_key: :current_user
+])
+
+# 3. Check database
+consents = MyApp.Consent.list_consent_settings!()
+IO.inspect(consents, label: "Database consents")
+# Should show the consent record with user_id set
+
+# 4. Simulate loading consent
+loaded = MyApp.Consent.Storage.get_consent(conn, [
+  resource: MyApp.Consent.ConsentSettings,
+  user_id_key: :current_user
+])
+
+IO.inspect(loaded, label: "Loaded consent")
+# Should match the saved consent
+```
+
+**What to verify:**
+- ✅ Consent record created in database with correct user_id
+- ✅ `get_consent/2` returns the same data that was saved
+- ✅ Anonymous users (no current_user) don't cause errors
+- ✅ "Newer wins" logic works (if implemented)
+
 If all these work, your resource is properly configured! 🎉
 
 ### Step 6: Update User Resource
@@ -469,20 +536,27 @@ defmodule MyApp.Consent.Storage do
   alias MyApp.Consent.ConsentSettings
 
   @doc """
-  Get consent with database fallback for authenticated users.
+  Get consent with "newer wins" logic across cookie and database storage.
+
+  This ensures that the most recent consent is used, preventing stale
+  cookie data from overwriting newer database changes made on other devices.
   """
   def get_consent(conn, opts \\\\ []) do
-    # Try base storage first (assigns/session/cookie)
-    case BaseStorage.get_consent(conn, opts) do
-      nil ->
-        # No consent in storage, check database
-        case get_user_id(conn, opts) do
-          nil -> nil
-          user_id -> load_from_database(user_id)
-        end
+    # Load consent from cookie/session
+    cookie_consent = BaseStorage.get_consent(conn, opts)
 
-      consent ->
-        consent
+    # Load from database for authenticated users
+    db_consent = case get_user_id(conn, opts) do
+      nil -> nil
+      user_id -> load_from_database(user_id)
+    end
+
+    # Return whichever is newer (or only available one)
+    case {cookie_consent, db_consent} do
+      {nil, nil} -> nil
+      {nil, db} -> db
+      {cookie, nil} -> cookie
+      {cookie, db} -> if newer?(db, cookie), do: db, else: cookie
     end
   end
 
@@ -505,8 +579,20 @@ defmodule MyApp.Consent.Storage do
   end
 
   defp get_user_id(conn, opts) do
-    user_id_key = Keyword.get(opts, :user_id_key, :current_user_id)
-    Map.get(conn.assigns, user_id_key)
+    user_id_key = Keyword.get(opts, :user_id_key, :current_user)
+
+    # Get the user from assigns (could be struct or nil)
+    case Map.get(conn.assigns, user_id_key) do
+      nil -> nil
+
+      # If user is a struct with .id field (most common case)
+      %{id: id} when is_binary(id) or is_integer(id) -> id
+
+      # If user_id_key points directly to an ID
+      id when is_binary(id) or is_integer(id) -> id
+
+      _ -> nil
+    end
   end
 
   defp load_from_database(user_id) do
@@ -543,8 +629,61 @@ defmodule MyApp.Consent.Storage do
     |> Ash.Changeset.for_create(:create, attrs)
     |> Ash.create()
   end
+
+  # Helper to compare timestamps - returns true if consent1 is newer
+  defp newer?(consent1, consent2) do
+    time1 = get_timestamp(consent1, "consented_at")
+    time2 = get_timestamp(consent2, "consented_at")
+
+    cond do
+      is_nil(time1) -> false
+      is_nil(time2) -> true
+      true -> DateTime.compare(time1, time2) == :gt
+    end
+  end
+
+  defp get_timestamp(consent, field) do
+    case consent[field] || consent[String.to_atom(field)] do
+      %DateTime{} = dt -> dt
+      _ -> nil
+    end
+  end
 end
 ```
+
+#### 🔍 Understanding User ID Extraction
+
+The `user_id_key` option (defaults to `:current_user`) typically points to a user **struct** in `conn.assigns`, not a raw ID. For example:
+
+```elixir
+conn.assigns.current_user = %MyApp.Accounts.User{
+  id: "550e8400-e29b-41d4-a716-446655440000",
+  email: "user@example.com",
+  ...
+}
+```
+
+The `get_user_id/2` function extracts the `.id` field from this struct:
+1. Checks if the value is nil (anonymous user)
+2. Checks if it's a struct with an `.id` field (most common)
+3. Checks if it's already an ID (string or integer)
+4. Returns nil for anything else
+
+If your authentication library sets a different assign (like `:user_id`), configure it:
+```elixir
+plug MyApp.Consent.Plug,
+  resource: MyApp.Consent.ConsentSettings,
+  user_id_key: :user_id  # Points directly to ID, not struct
+```
+
+#### 🔄 "Newer Wins" Logic
+
+The `get_consent/2` function implements conflict resolution:
+- **Scenario**: User changes preferences on Device B (saved to DB)
+- **Problem**: Device A still has old cookie with previous preferences
+- **Solution**: Compare `consented_at` timestamps, return newer consent
+
+This prevents stale cookies from overwriting recent changes made on other devices.
 
 ### Option 2: Custom Plug
 
@@ -599,10 +738,57 @@ Then use your custom plug in the router:
 
 ```elixir
 pipeline :browser do
-  # ... other plugs
-  plug MyApp.Consent.Plug, resource: MyApp.Consent.ConsentSettings
+  plug :accepts, ["html"]
+  plug :fetch_session
+  plug :fetch_cookies
+  plug :fetch_flash
+  plug :protect_from_forgery
+  plug :put_secure_browser_headers
+
+  # Authentication plug MUST come before consent plug
+  plug :load_current_user
+
+  # Consent plug reads current_user from assigns
+  plug MyApp.Consent.Plug,
+    resource: MyApp.Consent.ConsentSettings,
+    user_id_key: :current_user,
+    skip_session_cache: true  # Prevents session conflicts with auth
 end
 ```
+
+#### ⚠️ Critical Plug Configuration
+
+**1. Plug Order**
+
+Place the consent plug **AFTER** your authentication plug (e.g., `:load_current_user`). The consent plug needs access to `conn.assigns.current_user` to determine if the user is authenticated.
+
+```elixir
+# ✅ CORRECT ORDER
+plug :load_current_user      # Sets conn.assigns.current_user
+plug MyApp.Consent.Plug      # Reads conn.assigns.current_user
+
+# ❌ WRONG ORDER
+plug MyApp.Consent.Plug      # Can't find current_user yet!
+plug :load_current_user      # Too late
+```
+
+**2. Session Conflicts**
+
+Use `skip_session_cache: true` to prevent the consent plug from interfering with authentication session management:
+
+```elixir
+plug MyApp.Consent.Plug,
+  resource: MyApp.Consent.ConsentSettings,
+  skip_session_cache: true  # ← CRITICAL for auth compatibility
+```
+
+Without this, you may experience:
+- `FunctionClauseError` in session handling
+- Authentication failures in LiveView contexts
+- Session data corruption
+- Lost user authentication state
+
+The `skip_session_cache` option makes the plug read from cookies only, avoiding any `put_session/3` calls that could conflict with your authentication library.
 
 ## Handling Non-Atomic Operations
 
