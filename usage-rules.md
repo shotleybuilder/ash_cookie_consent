@@ -183,6 +183,50 @@ live_session :default,
 end
 ```
 
+### ⚠️ CRITICAL: live_session Replaces on_mount from live_view Macro
+
+**Phoenix Behavior**: When you specify `on_mount` in a `live_session`, it **completely replaces** any `on_mount` from your `live_view` macro. This is a common source of bugs.
+
+```elixir
+# ❌ WRONG: Only AshAuth hook runs, consent hook is LOST
+# lib/my_app_web.ex
+def live_view do
+  quote do
+    on_mount {AshCookieConsent.LiveView.Hook, :load_consent}  # Won't run!
+  end
+end
+
+# lib/my_app_web/router.ex
+live_session :admin,
+  on_mount: AshAuthentication.Phoenix.LiveSession do
+  # Consent hook from live_view macro is REPLACED, not combined!
+  live "/admin", AdminDashboardLive
+end
+
+# ✅ CORRECT: Explicitly list ALL hooks in live_session
+live_session :admin,
+  on_mount: [
+    AshAuthentication.Phoenix.LiveSession,           # First
+    {AshCookieConsent.LiveView.Hook, :load_consent}  # Second
+  ] do
+  live "/admin", AdminDashboardLive
+end
+```
+
+**Rule of Thumb**:
+- If you use `on_mount` in **both** `live_view` macro AND `live_session`, you MUST list ALL hooks in the `live_session`
+- The `live_session` hooks take precedence and replace the macro hooks
+- Missing this causes silent failures where assigns like `@consent` or `@current_user` are nil
+
+**Debugging**:
+```elixir
+# Add to your mount/3 to check which hooks ran
+def mount(_params, _session, socket) do
+  IO.inspect(Map.keys(socket.assigns), label: "Available assigns")
+  # Should see: [:consent, :cookie_groups, :show_consent_modal, :current_user, ...]
+end
+```
+
 ## Layout Configuration
 
 ### Adding the Consent Modal

@@ -200,6 +200,35 @@ live_session :default,
 end
 ```
 
+#### ⚠️ Important: Hook Ordering with Multiple on_mount Callbacks
+
+If you're using other LiveView hooks (like `AshAuthentication.Phoenix.LiveSession`), you **must** specify ALL hooks in your `live_session` block. The `on_mount` option in `live_session` **replaces** (not appends to) any `on_mount` defined in your `live_view` macro.
+
+```elixir
+# ❌ WRONG - Only AshAuthentication hook will run
+live_session :admin,
+  on_mount: AshAuthentication.Phoenix.LiveSession do
+  # The consent hook from live_view macro is REPLACED and won't run!
+  live "/admin", AdminDashboardLive
+end
+
+# ✅ CORRECT - Explicitly list all hooks in order
+live_session :admin,
+  on_mount: [
+    AshAuthentication.Phoenix.LiveSession,
+    {AshCookieConsent.LiveView.Hook, :load_consent}
+  ] do
+  # Both hooks will run in the order specified
+  live "/admin", AdminDashboardLive
+end
+```
+
+**Why this matters:**
+- Phoenix's `live_session` `on_mount` completely replaces any `on_mount` from your `live_view` macro
+- If you forget to list all hooks, some won't execute
+- This can cause missing assigns (like `@consent` or `@current_user`)
+- Always be explicit about hook ordering in `live_session` blocks
+
 ### Step 4: Add the Modal to Your Layout
 
 Add the consent modal to your root layout:

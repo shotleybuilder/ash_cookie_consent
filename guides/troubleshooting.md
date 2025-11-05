@@ -221,6 +221,37 @@ config :ash_cookie_consent,
 
 ## LiveView Issues
 
+### LiveView Hooks Not Running with live_session
+
+**Problem**: Other hooks (like `AshAuthentication.Phoenix.LiveSession`) work until you add a `live_session` block, then the consent hook stops working.
+
+**Root Cause**: Phoenix's `live_session` `on_mount` option **replaces** (not appends to) any `on_mount` defined in your `live_view` macro.
+
+**Solution**: Explicitly list ALL hooks in your `live_session` block:
+
+```elixir
+# ❌ WRONG - Only authentication hook runs
+live_session :admin,
+  on_mount: AshAuthentication.Phoenix.LiveSession do
+  # Consent hook from live_view macro is REPLACED!
+  live "/admin", AdminDashboardLive
+end
+
+# ✅ CORRECT - Both hooks run in order
+live_session :admin,
+  on_mount: [
+    AshAuthentication.Phoenix.LiveSession,
+    {AshCookieConsent.LiveView.Hook, :load_consent}
+  ] do
+  live "/admin", AdminDashboardLive
+end
+```
+
+**How to debug**:
+1. Add `IO.inspect(socket.assigns, label: "LiveView assigns")` in your `mount/3`
+2. Check if `@consent` and `@cookie_groups` are present
+3. If missing, verify all hooks are listed in `live_session`
+
 ### Hook Not Loading Consent
 
 **Problem**: `@consent` is nil in LiveView even after accepting cookies.
@@ -303,6 +334,91 @@ module.exports = {
 }
 ```
 
+## Session Issues
+
+### Session Interference with Other Libraries
+
+**Problem**: After adding `AshCookieConsent.Plug`, you experience session-related errors with other libraries (like `AshAuthentication`) or authentication stops working.
+
+**Root Cause**: The plug calls `put_session/3` to cache consent data, which can interfere with session handling when called at the wrong point in the pipeline or when other libraries have specific session expectations.
+
+**Symptoms**:
+- `FunctionClauseError` in `Plug.Conn.get_session/1`
+- Authentication hooks fail in LiveView contexts
+- Session data appears corrupted or missing
+- User authentication state is lost
+
+**Solution 1 - Disable Session Caching** (Recommended):
+
+Use the `:skip_session_cache` option to avoid session interference entirely:
+
+```elixir
+# lib/my_app_web/router.ex
+pipeline :browser do
+  plug :accepts, ["html"]
+  plug :fetch_session
+  plug :fetch_cookies
+  plug :fetch_flash
+  plug :protect_from_forgery
+  plug :put_secure_browser_headers
+
+  # Skip session caching to avoid interference
+  plug AshCookieConsent.Plug, skip_session_cache: true
+end
+```
+
+This makes the plug read consent from cookies only, avoiding any session manipulation. Performance impact is minimal since cookie reading is fast.
+
+**Solution 2 - Verify Plug Order**:
+
+If you need session caching, ensure proper plug order:
+
+```elixir
+pipeline :browser do
+  plug :fetch_session       # 1. Set up session
+  plug :fetch_cookies       # 2. Read cookies
+  plug :fetch_flash         # 3. Flash messages
+  plug :fetch_live_flash    # 4. LiveView flash (if using LiveView)
+
+  # NOW add consent plug after session setup is complete
+  plug AshCookieConsent.Plug
+
+  # Authentication plugs should come after
+  plug :load_current_user
+end
+```
+
+**Solution 3 - Use Cookie-Only Mode**:
+
+For maximum compatibility, rely entirely on cookie storage:
+
+```elixir
+# Don't add the plug at all if you're only using LiveView
+# Just use the LiveView Hook which reads from cookies directly
+
+# In lib/my_app_web.ex
+def live_view do
+  quote do
+    on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
+  end
+end
+```
+
+**Why This Happens**:
+
+The consent plug tries to cache consent data in the Phoenix session for performance. However:
+1. Some libraries expect specific session structure or timing
+2. LiveView's `on_mount` hooks receive session as a plain map, not a `Plug.Conn` struct
+3. Calling `put_session/3` too early can interfere with session cookie encryption
+4. Multiple session writes in the same request can cause conflicts
+
+**Best Practice**:
+
+For applications using authentication libraries or complex session handling:
+- Use `:skip_session_cache true` to avoid any session interference
+- Rely on cookie storage which is fast and isolated from other libraries
+- Only enable session caching if you've verified it doesn't conflict with your setup
+
 ## Performance Issues
 
 ### Slow Page Load
@@ -325,6 +441,11 @@ config :my_app, MyAppWeb.Endpoint,
     signing_salt: "...",
     max_age: 86400  # 1 day
   ]
+```
+
+3. **Consider disabling session cache**: If you don't need session caching, disable it for better performance and compatibility:
+```elixir
+plug AshCookieConsent.Plug, skip_session_cache: true
 ```
 
 **Solutions**:
