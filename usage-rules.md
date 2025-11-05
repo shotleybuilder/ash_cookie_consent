@@ -3,6 +3,41 @@
 **Version**: 0.1.0
 **Purpose**: Guide AI assistants in correctly implementing GDPR-compliant cookie consent management
 
+## Quick Integration Checklist
+
+**For a basic cookie-only setup (no database), complete these 3 steps:**
+
+1. **Add Plug to Router** (after `:fetch_session` and `:fetch_cookies`)
+   ```elixir
+   plug AshCookieConsent.Plug, skip_session_cache: true
+   ```
+
+2. **Add Modal to root.html.heex**
+   ```heex
+   <AshCookieConsent.Components.ConsentModal.consent_modal
+     current_consent={assigns[:consent]}
+     cookie_groups={assigns[:cookie_groups]}
+   />
+   ```
+
+3. **Add LiveView Hook** (if using LiveView - in lib/my_app_web.ex)
+   ```elixir
+   on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
+   ```
+
+4. **Add Consent Controller** (for form submission - in router)
+   ```elixir
+   post "/consent", ConsentController, :create
+   ```
+
+**⚠️ Critical**: If using authentication libraries (like AshAuthentication), use `skip_session_cache: true` to avoid session conflicts.
+
+**⚠️ Hook Ordering**: If you use `on_mount` in BOTH your `live_view` macro AND `live_session`, you MUST list ALL hooks in the `live_session` block (Phoenix replaces, not appends).
+
+See [Getting Started Guide](guides/getting-started.html) for complete setup.
+
+---
+
 ## Understanding AshCookieConsent
 
 AshCookieConsent is a lightweight, Ash-native library for Phoenix applications that provides:
