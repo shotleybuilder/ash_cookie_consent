@@ -16,7 +16,13 @@ GDPR-compliant cookie consent management for Ash Framework applications.
 - ✅ **Customizable UI**: Phoenix Components with AlpineJS for interactivity
 - ✅ **Lightweight**: Minimal dependencies, no heavy JavaScript frameworks
 - ✅ **Conditional Script Loading**: Load analytics/marketing scripts only with consent
-- ✅ **Comprehensive Testing**: 163 passing tests covering all integration points
+- ✅ **Comprehensive Testing**: 172 passing tests covering all integration points
+
+## Live Demo
+
+See it in action: **[ehs-enforcement.sertantai.com](https://ehs-enforcement.sertantai.com)**
+
+This production application uses AshCookieConsent for GDPR-compliant cookie management with database persistence for authenticated users.
 
 ## Why AshCookieConsent?
 
