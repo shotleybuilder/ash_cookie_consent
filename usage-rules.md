@@ -246,12 +246,23 @@ live_session :admin,
   ] do
   live "/admin", AdminDashboardLive
 end
+
+# 💡 BETTER: Skip consent hook for admin routes (prevents session conflicts)
+live_session :admin,
+  on_mount: [AshAuthentication.Phoenix.LiveSession] do
+  live "/admin", AdminDashboardLive
+  # No consent hook needed - Plug already set assigns, no modal on admin pages
+end
 ```
 
 **Rule of Thumb**:
 - If you use `on_mount` in **both** `live_view` macro AND `live_session`, you MUST list ALL hooks in the `live_session`
 - The `live_session` hooks take precedence and replace the macro hooks
 - Missing this causes silent failures where assigns like `@consent` or `@current_user` are nil
+
+**When to Skip the Consent Hook**:
+- ✅ **Include**: Public-facing pages that show the consent modal
+- ❌ **Skip**: Admin panels, authenticated dashboards (prevents session interference, see troubleshooting guide)
 
 **Debugging**:
 ```elixir

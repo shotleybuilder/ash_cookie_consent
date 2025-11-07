@@ -229,6 +229,38 @@ end
 - This can cause missing assigns (like `@consent` or `@current_user`)
 - Always be explicit about hook ordering in `live_session` blocks
 
+#### 💡 When to Skip the LiveView Hook
+
+**Consider omitting the consent hook from certain live_sessions:**
+
+```elixir
+# Public routes - INCLUDE consent hook for modal
+live_session :public,
+  on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
+  live "/", HomeLive
+  live "/about", AboutLive
+end
+
+# Admin routes - SKIP consent hook (already authenticated, no modal needed)
+live_session :admin,
+  on_mount: [AshAuthentication.Phoenix.LiveSession] do
+  live "/admin", AdminDashboardLive
+  # Consent hook NOT needed here
+end
+```
+
+**Why skip the hook for admin/authenticated routes?**
+
+1. **Session Interference**: When using `skip_session_cache: true`, the hook tries to read from an empty session, which can interfere with authentication hooks
+2. **No Modal Needed**: Authenticated admin users don't need the consent modal
+3. **Assigns Still Available**: The Plug still runs for these routes, so `@consent` is available in conn assigns if needed
+
+**Production Issue Solved**: This pattern prevents `KeyError: key :current_user not found` errors that occur when the consent hook interferes with authentication session handling in admin routes.
+
+**Rule of Thumb**:
+- ✅ **Include hook**: Public-facing pages where users see the consent modal
+- ❌ **Skip hook**: Admin panels, authenticated dashboards, or any route that doesn't show the modal
+
 ### Step 4: Add the Modal to Your Layout
 
 Add the consent modal to your root layout:

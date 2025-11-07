@@ -252,6 +252,43 @@ end
 2. Check if `@consent` and `@cookie_groups` are present
 3. If missing, verify all hooks are listed in `live_session`
 
+### KeyError: :current_user Not Found in Admin Routes
+
+**Problem**: Admin routes fail with `KeyError: key :current_user not found` when using both consent and authentication hooks.
+
+**Symptoms**:
+```
+[error] ** (KeyError) key :current_user not found in: %{consent: nil, ...}
+```
+
+**Root Cause**: When using `skip_session_cache: true` (recommended), the consent LiveView hook tries to read from an empty session, which interferes with authentication hooks like `AshAuthentication.Phoenix.LiveSession`.
+
+**Solution**: Skip the consent hook for admin/authenticated routes:
+
+```elixir
+# Public routes - Include consent hook
+live_session :public,
+  on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
+  live "/", HomeLive
+  live "/about", AboutLive
+end
+
+# Admin routes - Skip consent hook (only auth needed)
+live_session :admin,
+  on_mount: [AshAuthentication.Phoenix.LiveSession] do
+  live "/admin", AdminDashboardLive
+  # No consent hook - prevents session interference
+end
+```
+
+**Why this works**:
+- The Plug still runs for admin routes, so `@consent` is available in conn assigns
+- Admin users don't need the consent modal (already authenticated)
+- Skipping the hook prevents session conflicts with authentication
+- No more `KeyError` on `:current_user`
+
+**Verified in Production**: This pattern successfully resolved production errors where the consent hook was interfering with authentication session handling.
+
 ### Hook Not Loading Consent
 
 **Problem**: `@consent` is nil in LiveView even after accepting cookies.
