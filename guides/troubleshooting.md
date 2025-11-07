@@ -289,6 +289,28 @@ end
 
 **Verified in Production**: This pattern successfully resolved production errors where the consent hook was interfering with authentication session handling.
 
+**Alternative Root Cause**: If the error occurs in `handle_params/3` or early lifecycle callbacks, the issue may be accessing `@current_user` before the WebSocket connects:
+
+```elixir
+# ❌ WRONG: Accessing current_user before WebSocket connection
+def handle_params(_params, _uri, socket) do
+  user = socket.assigns.current_user  # May be nil during initial HTTP request!
+  # ...
+end
+
+# ✅ CORRECT: Guard with connected?(socket)
+def handle_params(_params, _uri, socket) do
+  if connected?(socket) do
+    user = socket.assigns.current_user  # Available after WebSocket
+    # ... use user
+  else
+    {:noreply, socket}  # Wait for WebSocket connection
+  end
+end
+```
+
+Authentication assigns are set by `on_mount` hooks during the WebSocket connection phase, not during the initial HTTP request. Use `connected?(socket)` to defer authentication-dependent logic.
+
 ### Hook Not Loading Consent
 
 **Problem**: `@consent` is nil in LiveView even after accepting cookies.
