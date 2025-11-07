@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Quick Integration Checklist in usage-rules.md for rapid setup guidance
+
+### Changed
+- **BREAKING DOCUMENTATION**: Removed global hook pattern from getting-started guide
+- Updated all integration examples to use router-level `live_session` only
+- Removed general Phoenix/LiveView teaching from documentation (focused on consent integration)
+- Comprehensive extending guide improvements with real-world database sync patterns
+
+### Fixed
+- Documentation now clearly warns against global hook anti-pattern
+- Added guidance for when to skip LiveView hook on admin/authenticated routes
+- Added session interference prevention with `skip_session_cache` option
+- Extending guide now includes user ID extraction, "newer wins" logic, and proper user relationships
+
 ## [0.1.0] - 2025-11-04
 
 Initial release of AshCookieConsent - GDPR-compliant cookie consent management for Ash Framework applications.

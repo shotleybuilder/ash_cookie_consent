@@ -7,8 +7,18 @@ defmodule AshCookieConsent.Components.ConsentModalTest do
   alias AshCookieConsent.Components.ConsentModal
 
   @cookie_groups [
-    %{id: "essential", label: "Essential Cookies", description: "Required cookies", required: true},
-    %{id: "analytics", label: "Analytics Cookies", description: "Analytics cookies", required: false}
+    %{
+      id: "essential",
+      label: "Essential Cookies",
+      description: "Required cookies",
+      required: true
+    },
+    %{
+      id: "analytics",
+      label: "Analytics Cookies",
+      description: "Analytics cookies",
+      required: false
+    }
   ]
 
   describe "consent_modal/1 visibility logic" do
