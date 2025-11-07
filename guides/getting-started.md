@@ -171,63 +171,95 @@ end
 
 ### Step 3: Configure LiveView (If Using LiveView)
 
-Add the Hook to your application web module:
+#### ⚠️ CRITICAL: Use Router-Level Hooks, NOT Global Hooks
+
+**❌ ANTI-PATTERN - Do NOT do this:**
 
 ```elixir
-# lib/my_app_web.ex
+# lib/my_app_web.ex - DON'T ADD HOOKS HERE
 defmodule MyAppWeb do
   def live_view do
     quote do
-      use Phoenix.LiveView,
-        layout: {MyAppWeb.Layouts, :app}
+      use Phoenix.LiveView, layout: {MyAppWeb.Layouts, :app}
 
-      # Add the consent hook
+      # ❌ WRONG: Applies to ALL LiveViews (admin, internal tools, etc.)
       on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
-
-      unquote(html_helpers())
     end
   end
 end
 ```
 
-Or add it globally in your router:
+**Why this is wrong:**
+- Applies consent tracking to admin-only routes that don't need it
+- Causes authentication conflicts in secured areas
+- Adds unnecessary overhead to internal tools
+- Violates separation of concerns
+
+**✅ CORRECT PATTERN - Use router-level `live_session`:**
 
 ```elixir
-live_session :default,
-  on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
-  live "/", HomeLive
-  # ... other routes
+# lib/my_app_web/router.ex
+scope "/", MyAppWeb do
+  pipe_through :browser
+
+  # Public routes - Include consent hook
+  live_session :public,
+    on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
+    live "/", HomeLive
+    live "/about", AboutLive
+    # ... other public routes
+  end
+
+  # Admin routes - NO consent hook
+  live_session :admin,
+    on_mount: [YourApp.AdminAuthHook] do  # Only auth, no consent
+    live "/admin", AdminDashboardLive
+  end
 end
 ```
 
-#### ⚠️ Important: Hook Ordering with Multiple on_mount Callbacks
+**Why this is correct:**
+- ✅ Consent tracking only on public-facing pages
+- ✅ Admin routes remain clean and fast
+- ✅ Clear separation of concerns
+- ✅ No authentication conflicts
 
-If you're using other LiveView hooks (like `AshAuthentication.Phoenix.LiveSession`), you **must** specify ALL hooks in your `live_session` block. The `on_mount` option in `live_session` **replaces** (not appends to) any `on_mount` defined in your `live_view` macro.
+#### 🔐 Integration with Authentication
+
+If your app uses authentication (like AshAuthentication), apply hooks in this order:
+
+**1. Authentication hooks FIRST** - to load the current user
+**2. Consent hooks SECOND** - to track consent preferences
 
 ```elixir
-# ❌ WRONG - Only AshAuthentication hook will run
-live_session :admin,
-  on_mount: AshAuthentication.Phoenix.LiveSession do
-  # The consent hook from live_view macro is REPLACED and won't run!
-  live "/admin", AdminDashboardLive
+# ✅ CORRECT: Auth first, then consent
+live_session :public,
+  on_mount: [
+    AshAuthentication.Phoenix.LiveSession,           # First: authenticate
+    {AshCookieConsent.LiveView.Hook, :load_consent}  # Second: consent
+  ],
+  session: {AshAuthentication.Phoenix.LiveSession, :generate_session, []} do
+  live "/", DashboardLive
+  live "/cases", CaseLive.Index
+  # ... other public routes requiring both auth and consent
 end
 
-# ✅ CORRECT - Explicitly list all hooks in order
+# ✅ CORRECT: Admin routes without consent (not needed for internal tools)
 live_session :admin,
   on_mount: [
-    AshAuthentication.Phoenix.LiveSession,
-    {AshCookieConsent.LiveView.Hook, :load_consent}
-  ] do
-  # Both hooks will run in the order specified
-  live "/admin", AdminDashboardLive
+    AshAuthentication.Phoenix.LiveSession  # Only auth, no consent
+  ],
+  session: {AshAuthentication.Phoenix.LiveSession, :generate_session, []} do
+  live "/admin", Admin.DashboardLive
+  # ... admin routes
 end
 ```
 
-**Why this matters:**
-- Phoenix's `live_session` `on_mount` completely replaces any `on_mount` from your `live_view` macro
-- If you forget to list all hooks, some won't execute
-- This can cause missing assigns (like `@consent` or `@current_user`)
-- Always be explicit about hook ordering in `live_session` blocks
+**Important Notes:**
+- Phoenix's `live_session` `on_mount` provides explicit control over which hooks run
+- Admin/internal routes don't need consent tracking - it's for public-facing GDPR compliance
+- Authentication must come first to set `@current_user` before other hooks
+- Each `live_session` explicitly declares its hooks - no global defaults
 
 #### 💡 When to Skip the LiveView Hook
 

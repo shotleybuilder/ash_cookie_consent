@@ -20,9 +20,13 @@
    />
    ```
 
-3. **Add LiveView Hook** (if using LiveView - in lib/my_app_web.ex)
+3. **Add LiveView Hook** (if using LiveView - in router, NOT web.ex)
    ```elixir
-   on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
+   # In router.ex - use live_session for public routes ONLY
+   live_session :public,
+     on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
+     live "/", HomeLive
+   end
    ```
 
 4. **Add Consent Controller** (for form submission - in router)
@@ -32,7 +36,7 @@
 
 **⚠️ Critical**: If using authentication libraries (like AshAuthentication), use `skip_session_cache: true` to avoid session conflicts.
 
-**⚠️ Hook Ordering**: If you use `on_mount` in BOTH your `live_view` macro AND `live_session`, you MUST list ALL hooks in the `live_session` block (Phoenix replaces, not appends).
+**⚠️ ANTI-PATTERN**: Do NOT add hooks to your `live_view` macro in `lib/my_app_web.ex`. This applies hooks globally to ALL LiveViews (including admin routes). Use router-level `live_session` instead for conditional application.
 
 See [Getting Started Guide](guides/getting-started.html) for complete setup.
 
@@ -176,45 +180,54 @@ plug :fetch_session  # Too late - plug needs session
 
 ### LiveView Integration
 
-Add the consent hook to your `live_view/0` macro in the web module:
+**❌ ANTI-PATTERN - Do NOT add hooks to `live_view` macro:**
 
 ```elixir
-# GOOD: Add to web module
+# ❌ WRONG: Applies to ALL LiveViews globally (admin, internal tools, etc.)
 # lib/my_app_web.ex
 def live_view do
   quote do
-    use Phoenix.LiveView,
-      layout: {MyAppWeb.Layouts, :app}
+    use Phoenix.LiveView, layout: {MyAppWeb.Layouts, :app}
 
-    # Add consent hook
+    # ❌ DON'T DO THIS - applies globally
     on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
-
-    unquote(html_helpers())
-  end
-end
-
-defp html_helpers do
-  quote do
-    # Import consent components
-    import AshCookieConsent.Components.ConsentModal
-    import AshCookieConsent.Components.ConsentScript
   end
 end
 ```
 
-**Alternatively**, add to specific LiveViews or live_session:
+**Why this is wrong:**
+- Applies consent to admin routes that don't need it
+- Causes authentication conflicts
+- Violates separation of concerns (GDPR is for public-facing pages)
+
+**✅ CORRECT: Use router-level `live_session` for conditional application:**
 
 ```elixir
-# GOOD: Per-LiveView
-defmodule MyAppWeb.HomeLive do
-  use MyAppWeb, :live_view
-  on_mount {AshCookieConsent.LiveView.Hook, :load_consent}
-end
-
-# GOOD: Per live_session
-live_session :default,
+# ✅ GOOD: Router-level conditional application
+# lib/my_app_web/router.ex
+live_session :public,
   on_mount: [{AshCookieConsent.LiveView.Hook, :load_consent}] do
   live "/", HomeLive
+  live "/about", AboutLive
+  # Only public routes that need consent tracking
+end
+
+live_session :admin,
+  on_mount: [YourApp.AdminAuthHook] do  # No consent for admin
+  live "/admin", AdminDashboardLive
+end
+```
+
+**Import components in web.ex:**
+
+```elixir
+# lib/my_app_web.ex
+defp html_helpers do
+  quote do
+    # Import consent components for use in templates
+    import AshCookieConsent.Components.ConsentModal
+    import AshCookieConsent.Components.ConsentScript
+  end
 end
 ```
 
