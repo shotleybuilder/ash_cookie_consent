@@ -258,24 +258,8 @@ end
 **Important Notes:**
 - Phoenix's `live_session` `on_mount` provides explicit control over which hooks run
 - Admin/internal routes don't need consent tracking - it's for public-facing GDPR compliance
-- Authentication must come first to set `@current_user` before other hooks
+- Authentication hooks should come first if you use both auth and consent
 - Each `live_session` explicitly declares its hooks - no global defaults
-
-**Accessing `@current_user` in LiveView:**
-If you need `@current_user` in your LiveView, guard it with `connected?(socket)`:
-```elixir
-def handle_params(_params, _uri, socket) do
-  if connected?(socket) do
-    # @current_user is available after WebSocket connection
-    user = socket.assigns.current_user
-    # ... use user
-  else
-    # Initial HTTP request - current_user not yet set
-    {:noreply, socket}
-  end
-end
-```
-Authentication assigns are set by hooks during WebSocket connection, not initial HTTP request.
 
 #### 💡 When to Skip the LiveView Hook
 
